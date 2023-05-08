@@ -11,6 +11,8 @@ namespace Common
 {
     public static class SocketMethods
     {
+        private static readonly object sendLock = new object();
+
         public static bool IsConnected(Socket socket)
         {
             const int TimeToWait = 500;
@@ -46,8 +48,17 @@ namespace Common
         public static void SendMessage(Message message, Socket socket)
         {
             byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(message);
-            socket.Send(BitConverter.GetBytes(bytes.Length));
-            socket.Send(bytes);
+            lock (sendLock)
+            {
+                socket.Send(BitConverter.GetBytes(bytes.Length));
+                int start = 0;
+                while (start + Constants.TransferBlockSize < bytes.Length)
+                {
+                    socket.Send(bytes[start..(start + Constants.TransferBlockSize)]);
+                    start += Constants.TransferBlockSize;
+                }
+                socket.Send(bytes[start..]);
+            }
         }
     }
 }

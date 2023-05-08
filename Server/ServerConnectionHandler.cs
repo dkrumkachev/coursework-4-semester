@@ -83,19 +83,7 @@ namespace Server
                 while (IsConnected(client))
                 {
                     Message message = ReceiveMessage(client);
-                    switch (message.MessageType)
-                    {
-                        case Message.Type.Text:
-                            
-                        case Message.Type.Picture:
-                            break;
-                        case Message.Type.FileContents:
-                            break;
-                        case Message.Type.FileRequest:
-                            break;
-                        case Message.Type.Disconnect:
-                            break;
-                    }
+                    HandleMessage(message);
                 }
             }
             catch {}
@@ -119,9 +107,10 @@ namespace Server
                 {
                     return;
                 }
-            }
-            
+            }   
         }
+
+        
 
     }
 }
