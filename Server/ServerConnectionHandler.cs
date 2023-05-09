@@ -3,7 +3,8 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using Common;
-using static Common.SocketMethods;
+using Common.Messages;
+using static Common.Methods;
 
 namespace Server
 {
@@ -75,7 +76,7 @@ namespace Server
             Socket client = server.Accept();
             try
             {
-                if (ReceiveMessage(client).MessageType != Message.Type.Connect)
+                if (ReceiveMessage(client) is not ConnectionMessage)
                 {
                     return;
                 }
@@ -98,12 +99,12 @@ namespace Server
         {
             while (IsConnected(client))
             {
-                Message message = ReceiveMessage(client);
-                if (message.MessageType == Message.Type.Register)
+                var message = (AuthenticationMessage)ReceiveMessage(client);
+                if (message.IsRegistration)
                 {
                     return;
                 }
-                else if (message.MessageType == Message.Type.Authenticate)
+                else
                 {
                     return;
                 }

@@ -6,10 +6,11 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
+using Common.Messages;
 
 namespace Common
 {
-    public static class SocketMethods
+    public static class Methods
     {
         private static readonly object sendLock = new object();
 

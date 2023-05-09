@@ -1,4 +1,5 @@
 ﻿using Common;
+using Common.Messages;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -7,7 +8,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
-using static Common.SocketMethods;
+using static Common.Methods;
 
 namespace Server
 {
@@ -21,8 +22,6 @@ namespace Server
 
         public int ID { get; }
 
-        public ConcurrentDictionary<int, List<User>> Chats { get; }
-
         private int newChatID;
 
         public ConcurrentDictionary<int, List<byte[]>> History { get; }
@@ -34,8 +33,6 @@ namespace Server
             IsOnline = true;
             Name = name;
             ID = id;
-            Chats = new ConcurrentDictionary<int, List<User>>();
-            Chats.TryAdd(Constants.SelfChatID, new List<User>() { this });
             newChatID = 1;
             History = new ConcurrentDictionary<int, List<byte[]>>();
             History.TryAdd(Constants.SelfChatID, new List<byte[]>());
@@ -44,14 +41,17 @@ namespace Server
         public void SendIfOnline(Message message)
         {
             message.Timestamp = DateTime.UtcNow;
-            if (message.ChatID != Constants.SelfChatID && IsOnline)
+            if (message.SenderID != ID && IsOnline)
             {
                 SendMessage(message, Socket);
             }
-            SaveToHistory(message);
+            if (message is ChatMessage userMessage)
+            {
+                SaveToHistory(userMessage);
+            }
         }
 
-        public void SaveToHistory(Message message)
+        public void SaveToHistory(ChatMessage message)
         {
             if (History.TryGetValue(message.ChatID, out List<byte[]>? chatHistory))
             {
@@ -59,16 +59,5 @@ namespace Server
             }
         }
 
-        public int CreateNewChat(List<User> chatMembers)
-        {
-            int chatID = newChatID;
-            Chats.TryAdd(chatID, chatMembers);
-            foreach (var chatMember in chatMembers) 
-            {
-                
-                chatMember.Chats.TryAdd(chatID);   
-            }
-            return Interlocked.Increment(ref newChatID);
-        }
     }
 }

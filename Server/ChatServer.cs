@@ -4,42 +4,54 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Reflection.Metadata;
 using System.Text;
 using System.Threading.Tasks;
 using Common;
-using static Common.SocketMethods;
+using Common.Messages;
+using static Common.Methods;
 
 
 namespace Server
 {
     internal class ChatServer
     {
+        
         private readonly ConcurrentDictionary<int, User> users = new();
+        private readonly ConcurrentDictionary<int, List<User>> chats = new();
+        private int lastCreatedChat = 0;
         private readonly ConcurrentDictionary<string, byte[]> files = new();
-
 
         private void HandleMessage(Message message)
         {
-            switch (message.MessageType)
+            if (message is ConnectionMessage)
             {
-                case Message.Type.Text:
-                case Message.Type.Picture:
-                    break;
-                case Message.Type.FileContents:
-                    break;
-                case Message.Type.FileRequest:
-                    break;
-                case Message.Type.Disconnect:
-                    break;
+
             }
+            else if (message is ChatCreationMessage)
+            {
+                HandleChatCreationMessage((ChatCreationMessage)message);
+            }
+            else if (message is FileInfoMessage)
+            {
+
+            }
+            else if (message is FileMessage)
+            {
+
+            }
+            else if (message is ChatMessage)
+            {
+                HandleUserMessage((ChatMessage)message);
+            }       
         }
 
-        private bool HandleTextAndPictureMessage(Message message)
+        private bool HandleUserMessage(ChatMessage message)
         {
             try
             {
                 User sender = users[message.SenderID];
-                List<User> receivers = sender.Chats[message.ChatID];
+                List<User> receivers = chats[message.ChatID];
                 foreach (var receiver in receivers)
                 {
                     receiver.SendIfOnline(message);
@@ -52,18 +64,26 @@ namespace Server
             return true;
         }
 
-        private bool HandleCreateChatMessage(Message message)
+        private bool HandleChatCreationMessage(ChatCreationMessage message)
         {
             try
             {
                 User sender = users[message.SenderID];
-                List<User> chatMembers = new List<User>();
-                for (var i = 0; i < message.Contents.Length; i += sizeof(int))
+                if (message.ChatID == 0)
                 {
-                    int userID = BitConverter.ToInt32(message.Contents, i);
-                    chatMembers.Add(users[userID]);
+                    List<User> chatMembers = new List<User>();
+                    foreach (var userID in message.UserIDs)
+                    {
+                        chatMembers.Add(users[userID]);
+                    }
+                    int chatID = Interlocked.Increment(ref lastCreatedChat);
+                    chats.TryAdd(chatID, chatMembers);
+                    message.ChatID = chatID;
                 }
-                sender.CreateNewChat(chatMembers);
+                foreach (var member in chats[message.ChatID])
+                {
+                    member.SendIfOnline(message);
+                }
             }
             catch (KeyNotFoundException)
             {
