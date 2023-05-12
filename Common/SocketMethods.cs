@@ -10,7 +10,7 @@ using Common.Messages;
 
 namespace Common
 {
-    public static class Methods
+    public static class SocketMethods
     {
         private static readonly object sendLock = new object();
 

@@ -8,6 +8,7 @@ namespace Common
         public const SocketType SocketType = System.Net.Sockets.SocketType.Stream;
         public const ProtocolType ProtocolType = System.Net.Sockets.ProtocolType.Tcp;
         public const int SelfChatID = 0;
+        public const int ServerID = 0;
 
         public static int TransferBlockSize { get; } = 1024;
         

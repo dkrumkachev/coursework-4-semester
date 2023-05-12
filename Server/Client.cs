@@ -8,13 +8,17 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
-using static Common.Methods;
+using static Common.SocketMethods;
 
 namespace Server
 {
-    internal class User
+    internal class Client
     {
-        public bool IsOnline { get; set; }
+        public readonly object IsOnlineLock = new();
+        public readonly object NameLock = new();
+
+
+        public bool IsOnline { get; set; } = true;
 
         public Socket Socket { get; set; }
 
@@ -22,19 +26,15 @@ namespace Server
 
         public int ID { get; }
 
-        private int newChatID;
+        public List<int> Chats { get; } = new();
 
-        public ConcurrentDictionary<int, List<byte[]>> History { get; }
+        public ConcurrentDictionary<int, List<byte[]>> History { get; } = new();
 
-
-        public User(Socket socket, string name, int id)
+        public Client(Socket socket, string name, int id)
         {
             Socket = socket;
-            IsOnline = true;
             Name = name;
             ID = id;
-            newChatID = 1;
-            History = new ConcurrentDictionary<int, List<byte[]>>();
             History.TryAdd(Constants.SelfChatID, new List<byte[]>());
         }
 
@@ -53,7 +53,7 @@ namespace Server
 
         public void SaveToHistory(ChatMessage message)
         {
-            if (History.TryGetValue(message.ChatID, out List<byte[]>? chatHistory))
+            if (message is not FileMessage && History.TryGetValue(message.ChatID, out List<byte[]>? chatHistory))
             {
                 chatHistory.Add(JsonSerializer.SerializeToUtf8Bytes(message));
             }

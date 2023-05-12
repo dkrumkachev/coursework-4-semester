@@ -1,17 +1,19 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data.SqlClient;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace Server
 {
-    internal class Program
+    public static class Program
     {
         static void Main(string[] args)
         {
-            ServerConnectionHandler server = new ServerConnectionHandler();
+            Server server = new Server();
             server.Run();
+            
         }
     }
 }

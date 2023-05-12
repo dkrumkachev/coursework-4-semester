@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.IO.Enumeration;
 using System.Linq;
 using System.Net;
+using System.Numerics;
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
+using static Common.Encryption.Encryption;
 
 namespace Common.Messages
 {
@@ -15,21 +17,9 @@ namespace Common.Messages
     [JsonDerivedType(typeof(FileInfo), typeDiscriminator: "fileInfo")]
     [JsonDerivedType(typeof(ChatCreationMessage), typeDiscriminator: "chatCreation")]
     [JsonDerivedType(typeof(AuthenticationMessage), typeDiscriminator: "authentication")]
-    [JsonDerivedType(typeof(ConnectionMessage), typeDiscriminator: "connection")]
+    [JsonDerivedType(typeof(ServiceMessage), typeDiscriminator: "service")]
     public abstract class Message
     {
-        /*public enum Type
-        {
-            Text, Picture, FileRequest, FileInfo, FileContents,
-            CreateChat, Connect, Disconnect, Register, Authenticate,
-        }
-
-        public Type MessageType { get; }
-
-        public byte[] Contents { get; }
-
-        public int ChatID { get; }*/
-
         public int SenderID { get; }
 
         public DateTime Timestamp { get; set; }
@@ -38,14 +28,6 @@ namespace Common.Messages
         {
             SenderID = senderID;
         }
-
-       /* public Message(Type messageType, byte[] contents, int senderID = 0, int chatID = 0)
-        {
-            MessageType = messageType;
-            Contents = contents;
-            SenderID = senderID;
-            ChatID = chatID;
-        }*/
     }
 
     public class ChatMessage : Message
@@ -81,11 +63,11 @@ namespace Common.Messages
 
     public class FileInfoMessage : ChatMessage
     {
-        public int FileID { get; }
+        public string FileID { get; }
 
         public string FileName { get; }
 
-        public FileInfoMessage(int fileID, string filename, int chatID, int senderID)
+        public FileInfoMessage(string fileID, string filename, int chatID, int senderID)
             : base(chatID, senderID)
         {
             FileID = fileID;
@@ -95,42 +77,109 @@ namespace Common.Messages
 
     public class ChatCreationMessage : ChatMessage 
     {
-        public List<int> UserIDs { get; }
+        public List<int> Members { get; }
 
-        public Dictionary<int, int> OpenKeys { get; set; }
+        public (int Count, BigInteger PublicKey)[] PublicKeys { get; }
 
-        public ChatCreationMessage(List<int> userIDs, Dictionary<int, int> openKeys, int senderID, int chatID = 0) 
-            : base(chatID, senderID)
+        public DHParameters DHParams { get; set; }
+
+        public int HopsNumber { get; set; }
+
+        public ChatCreationMessage(List<int> users, int senderID) : base(chatID: 0, senderID)
         {
-            UserIDs = userIDs;
-            OpenKeys = openKeys;
+            Members = users;
+            PublicKeys = new (int, BigInteger)[users.Count];
+            Array.Fill(PublicKeys, (0, 0));
         }
+
+        /* Client: 
+        for (var i = 0; i < PublicKeys.Length; i++)
+        {
+            if (PublicKeys[i].Count == 0)
+            {
+                PublicKeys[i].Count = 1;
+                PublicKeys[i].PublicKey = g ^ privateKey;
+                break;
+            }
+            if (PublicKeys[i].Count != -1)
+            {
+                PublicKeys[i].Count += 1;
+                if (PublicKeys[i].Count == Users.Count) 
+                {
+                    CryptoKey = PublicKeys[i].PublicKey ^ privateKey;
+                    PublicKeys[i].Count = -1;
+                    PublicKeys[i].PublicKey = 0;
+                }
+                else
+                {
+                    PublicKeys[i].PublicKey ^= privateKey;
+                }
+            }
+        }*/
+
     }
 
     public class AuthenticationMessage : Message
     {
-        public bool IsRegistration { get; }
+        public bool IsSigningUp { get; }
 
-        public string Login { get; }
+        public string Email { get; }
 
         public string Password { get; }
 
-        public AuthenticationMessage(int senderID, bool registration, string login, string password) : base(senderID)
+        public AuthenticationMessage(int senderID, bool signingUp, string email, string password) : base(senderID)
         {
-            IsRegistration = registration;
-            Login = login;
+            IsSigningUp = signingUp;
+            Email = email;
             Password = password;
         }
     }
 
-    public class ConnectionMessage : Message
+    public class ServiceMessage : Message
     {
-        public bool Disconnecting { get; }
-
-        public ConnectionMessage(int senderID, bool disconnecting) : base(senderID)
+        public enum Type
         {
-            Disconnecting = disconnecting;
+            Connecting,
+            Disconnecting,
+            DiffieHellman,
+            Success,
+            Error
+        }
+
+        public DHParameters DHParameters { get; set; }
+
+        public byte[]? AdditionalInfo { get; set; }
+
+        public Type MessageType { get; }
+
+        public ServiceMessage(int senderID, Type messageType, byte[]? additionalInfo = null, 
+            DHParameters DHParams = default) : base(senderID)
+        {
+            MessageType = messageType;
+            AdditionalInfo = additionalInfo;
+            DHParameters = DHParams;
+        }
+
+    }
+
+    public class UserInfoMessage : Message
+    {
+        public int UserID { get; }
+        
+        public string Name { get; }
+
+        public bool IsOnline { get; }
+
+        public Dictionary<int, List<int>> Chats { get; }
+
+        public UserInfoMessage(int senderID, int userID, string name = "", bool isOnline = true) : base(senderID)
+        {
+            UserID = userID;
+            Name = name;
+            IsOnline = isOnline;
         }
     }
+
+
 
 }
