@@ -1,13 +1,17 @@
 ﻿using System.Collections.Concurrent;
+using System.Data;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
-using System.Numerics;
 using System.Reflection;
 using System.Text;
 using Common;
 using Common.Encryption;
 using Common.Messages;
+using Org.BouncyCastle.Crypto.Paddings;
+using Org.BouncyCastle.Crypto.Parameters;
+using Org.BouncyCastle.Math;
+using Org.BouncyCastle.Math.EC;
 using static Common.SocketMethods;
 
 namespace Server
@@ -83,91 +87,89 @@ namespace Server
 
         private void CommunicateWithClient()
         {
-            Socket client = server.Accept();
+            Socket clientSocket = server.Accept();
             try
             {
-                if (((ServiceMessage)ReceiveMessage(client)).MessageType != ServiceMessage.Type.Connecting)
+                if (((ServiceMessage)ReceiveMessage(clientSocket)).MessageType != ServiceMessage.Type.Connecting)
                 {
                     return;
                 }
-                KeyExchange(client);
-                ClientAuthentication(client);
-                while (IsConnected(client))
+                TripleDES tripleDES = KeyExchange(clientSocket);
+                Client client = ClientAuthentication(clientSocket, tripleDES);
+                client.TripleDES = tripleDES;
+                client.IsOnline = true;
+                while (IsConnected(clientSocket))
                 {
-                    Message message = ReceiveMessage(client);
+                    Message message = ReceiveMessage(clientSocket, client.TripleDES);
                     HandleMessage(message);
                 }
             }
             catch {}
             finally
             {
-                client.Close();
+
+                clientSocket.Close();
             }
 
         }
 
-        private void KeyExchange(Socket client)
+        private TripleDES KeyExchange(Socket client)
         {
-
+            ECDomainParameters domainParams = Encryption.GetDomainParams();
+            BigInteger privateKey = Encryption.GeneratePrivateKey();
+            ECPoint serverPublicKey = domainParams.G.Multiply(privateKey);
+            SendMessage(new ECDHMessage(ServerID, domainParams, serverPublicKey), client);
+            var response = (ECDHMessage)ReceiveMessage(client);
+            byte[] sharedKey = Encryption.GetSharedSecretBytes(response.PublicKey, TripleDES.KeySize);
+            var tripleDES = new TripleDES
+            {
+                Key = sharedKey
+            };
+            SendSuccessMessage(client, tripleDES);
+            return tripleDES;
         }
 
-        private void ClientAuthentication(Socket client)
+
+        private Client ClientAuthentication(Socket clientSocket, TripleDES tripleDES)
         {
-            while (IsConnected(client))
+            while (IsConnected(clientSocket))
             {
-                var message = (AuthenticationMessage)ReceiveMessage(client);
-                if (message.IsSigningUp)
+                var message = (AuthenticationMessage)ReceiveMessage(clientSocket, tripleDES);
+                try
                 {
-                    SignUp(client, message);
+                    return message.IsSigningUp ? SignUp(clientSocket, message, tripleDES) 
+                        : SignIn(clientSocket, message, tripleDES);
                 }
-                else
+                catch (ArgumentException e)
                 {
-                    SignIn(client, message);
+                    var error = Encoding.Default.GetBytes(e.Message);
+                    var errorMessage = new ServiceMessage(ServerID, ServiceMessage.Type.Error, error);
+                    SendMessage(errorMessage, clientSocket, tripleDES);
                 }
             }
+            throw new Exception();
         }
 
-        private void SignUp(Socket client, AuthenticationMessage message)
+        private Client SignUp(Socket clientSocket, AuthenticationMessage message, TripleDES tripleDES)
         {
-            try
-            {
-                int newUserID = Sql.AddUser(message.Email, message.Password);
-                if (newUserID == -1)
-                {
-                    SendMessage(new ServiceMessage(ServerID, ServiceMessage.Type.Error), client);
-                }
-                else
-                {
-                    SendMessage(new UserInfoMessage(ServerID, newUserID), client);
-                    var userInfo = (UserInfoMessage)ReceiveMessage(client);
-                    clients.TryAdd(newUserID, new Client(client, userInfo.Name, newUserID));
-                    SendSuccessMessage(client);
-                }
-            }
-            catch (ArgumentException e)
-            {
-                var error = Encoding.Default.GetBytes(e.Message);
-                var errorMessage = new ServiceMessage(ServerID, ServiceMessage.Type.Error, error);
-                SendMessage(errorMessage, client);
-            }
+            int newUserID = Sql.AddUser(message.Email, message.Password);
+            SendMessage(new UserInfoMessage(ServerID, newUserID), clientSocket, tripleDES);
+            var userInfo = (UserInfoMessage)ReceiveMessage(clientSocket, tripleDES);
+            var client = new Client(clientSocket, userInfo.Name, newUserID);
+            clients.TryAdd(newUserID, client);
+            SendSuccessMessage(clientSocket, tripleDES);
+            return client;
         }
-
-        private void SignIn(Socket client, AuthenticationMessage message)
+        
+        private Client SignIn(Socket clientSocket, AuthenticationMessage message, TripleDES tripleDES)
         {
-            try
-            {
-                int userID = Sql.FindUser(message.Email, message.Password);
-                var userInfoMessage = new UserInfoMessage(ServerID, userID, clients[userID].Name);
-                SendMessage(userInfoMessage, client);
-                // send chats and keys
-                SendSuccessMessage(client);
-            }
-            catch (ArgumentException e)
-            {
-                var error = Encoding.Default.GetBytes(e.Message);
-                var errorMessage = new ServiceMessage(ServerID, ServiceMessage.Type.Error, error);
-                SendMessage(errorMessage, client);
-            }
+            int userID = Sql.FindUser(message.Email, message.Password);
+            Client client = clients[userID];
+            var userInfoMessage = new UserInfoMessage(ServerID, userID, client.Name);
+            SendMessage(userInfoMessage, clientSocket, tripleDES);
+            // send chats and keys
+            SendSuccessMessage(clientSocket, tripleDES);
+            return client;
         }
 
         private bool HandleMessage(Message message)
@@ -252,11 +254,11 @@ namespace Server
             message.ChatID = chatID;
         }
 
-        private bool IsKeyExchangeCompleted((int Count, BigInteger PublicKey)[] publicKeys)
+        private bool IsKeyExchangeCompleted((int Count, ECPoint? PublicKey)[] publicKeys)
         {
             for (var i = 0; i < publicKeys.Length; i++)
             {
-                if (publicKeys[i].Count != -1 || publicKeys[i].PublicKey != 0)
+                if (publicKeys[i].Count != -1)
                 {
                     return false;
                 }
@@ -304,15 +306,14 @@ namespace Server
                     {
                         client.Name = message.Name;
                     }
-                    SendSuccessMessage(client.Socket);
+                    client.SendIfOnline(new ServiceMessage(ServerID, ServiceMessage.Type.Success));
                 }
             }
         }
 
-
-        private void SendSuccessMessage(Socket client)
+        private void SendSuccessMessage(Socket client, TripleDES? tripleDES = null)
         {
-            SendMessage(new ServiceMessage(ServerID, ServiceMessage.Type.Success), client);
+            SendMessage(new ServiceMessage(ServerID, ServiceMessage.Type.Success), client, tripleDES);
         }
 
     }

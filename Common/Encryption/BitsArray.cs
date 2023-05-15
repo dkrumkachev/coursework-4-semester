@@ -9,7 +9,9 @@ namespace Common.Encryption
 {
     public class BitsArray
     {
-        private bool[] bits;
+        public bool[] bits;
+
+
         public int Length { get { return bits.Length; } private set { Array.Resize(ref bits, value); } }
 
         public int this[int index]
@@ -30,24 +32,24 @@ namespace Common.Encryption
 
         public BitsArray(byte[] values)
         {
-            bits = new bool[values.Length * sizeof(byte)];
+            bits = new bool[values.Length * 8];
             for (int i = 0; i < values.Length; i++)
             {
-                for (int j = 0; j < sizeof(byte) * sizeof(byte); j++)
+                for (int j = 0; j < 8; j++)
                 {
-                    this[i * sizeof(byte) + j] = (values[i] & (1 << j));
+                    this[i * 8 + j] = (values[i] & (1 << j));
                 }
             }
         }
 
         public BitsArray(int[] values)
         {
-            bits = new bool[values.Length * sizeof(byte)];
+            bits = new bool[values.Length * sizeof(int) * 8];
             for (int i = 0; i < values.Length; i++)
             {
-                for (int j = 0; j < sizeof(int) * sizeof(byte); j++)
+                for (int j = 0; j < 32; j++)
                 {
-                    this[i * sizeof(byte) + j] = (values[i] & (1 << j));
+                    this[i * 32 + j] = (values[i] & (1 << j));
                 }
             };
         }
@@ -151,7 +153,7 @@ namespace Common.Encryption
 
         public byte ToByte()
         {
-            if (bits.Length > sizeof(byte))
+            if (bits.Length > 8)
             {
                 throw new InvalidCastException();
             }
@@ -179,14 +181,14 @@ namespace Common.Encryption
 
         public byte[] ToByteArray()
         {
-            if (bits.Length % sizeof(byte) != 0)
+            if (bits.Length % 8 != 0)
             {
-                Length += sizeof(byte) - bits.Length % sizeof(byte);
+                Length += 8 - bits.Length % 8;
             }
-            byte[] bytes = new byte[bits.Length / sizeof(byte)];
+            byte[] bytes = new byte[bits.Length / 8];
             for (int i = 0; i < bytes.Length; i++)
             {
-                bytes[i] = (byte)GetRange(i * sizeof(byte), sizeof(byte)).ToByte();
+                bytes[i] = GetRange(i * 8, 8).ToByte();
             }
             return bytes;
         }

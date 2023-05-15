@@ -14,6 +14,7 @@ namespace Common
         
         public static int ServerPort { get; } = 4886;
 
+        public static string ServerIP { get; } = "192.168.100.1"; 
         
     }
 }

@@ -15,19 +15,24 @@ namespace Common.Encryption
         public new const int KeySize = DES.KeySize * KeysNumber;
         public new const int EffectiveKeySize = DES.EffectiveKeySize * KeysNumber;
 
-        private byte[] key = new byte[KeySize / sizeof(byte)];
+        private byte[] key = new byte[KeySize / 8];
         private BitsArray keyBits = new();
         private readonly BitsArray[][] subkeys = new BitsArray[KeysNumber][];
         private readonly BitsArray[][] reversedSubkeys = new BitsArray[KeysNumber][];
 
-        public override byte[] Encrypt(byte[] bytes, byte[] key, bool decrypt = false)
+        public new byte[] Key
         {
-            if (key != this.key)
+            get { return key; }
+            set
             {
-                this.key = key;
+                key = value;
                 keyBits = new BitsArray(key);
                 GenerateSubkeysArray(keyBits);
             }
+        }
+
+        public override byte[] Encrypt(byte[] bytes, bool decrypt = false)
+        {
             List<BitsArray> blocks = SplitIntoBlocks(bytes);
             if (!decrypt)
             {

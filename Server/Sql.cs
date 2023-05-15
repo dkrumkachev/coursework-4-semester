@@ -11,10 +11,6 @@ namespace Server
     {
         private const string SqlConnectionString =
            "Server=localhost\\SQLEXPRESS;Database=Coursework;Trusted_Connection=True;";
-        private static readonly string DatabaseTableName = "Users";
-        private static readonly string Idfield = "id";
-        private static readonly string EmailField = "email";
-        private static readonly string PasswordField = "password";
 
         public static int FindUser(string email, string password)
         {
@@ -42,10 +38,10 @@ namespace Server
         {
             using SqlConnection connection = new SqlConnection(SqlConnectionString);
             connection.Open();
-            var checkSql = "SELECT COUNT(*) FROM Users WHERE email = @Email";
-            var checkCommand = new SqlCommand(checkSql, connection);
-            checkCommand.Parameters.AddWithValue("@Email", email);
-            if ((int)checkCommand.ExecuteScalar() > 0)
+            var selectSql = "SELECT COUNT(*) FROM Users WHERE email = @Email";
+            var selectCommand = new SqlCommand(selectSql, connection);
+            selectCommand.Parameters.AddWithValue("@Email", email);
+            if ((int)selectCommand.ExecuteScalar() > 0)
             {
                 throw new ArgumentException("A user with this email address already exists.");
             }
@@ -55,13 +51,13 @@ namespace Server
             insertCommand.Parameters.AddWithValue("@Email", email);
             insertCommand.Parameters.AddWithValue("@Password", password);
             object newUserIdObj = insertCommand.ExecuteScalar();
-            if (newUserIdObj != null && int.TryParse(newUserIdObj.ToString(), out int newUserId))
+            if (int.TryParse(newUserIdObj.ToString(), out int newUserId))
             {
                 return newUserId;
             }
             else
             {
-                return -1;
+                throw new ArgumentException("Error while adding a new user.");
             }
         }
     }

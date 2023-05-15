@@ -1,4 +1,5 @@
 ﻿using Common;
+using Common.Encryption;
 using Common.Messages;
 using System;
 using System.Collections.Concurrent;
@@ -17,6 +18,7 @@ namespace Server
         public readonly object IsOnlineLock = new();
         public readonly object NameLock = new();
 
+        private static readonly object sendLock = new();
 
         public bool IsOnline { get; set; } = true;
 
@@ -25,6 +27,8 @@ namespace Server
         public string Name { get; set; }
 
         public int ID { get; }
+
+        public TripleDES TripleDES { get; set; }
 
         public List<int> Chats { get; } = new();
 
@@ -35,16 +39,26 @@ namespace Server
             Socket = socket;
             Name = name;
             ID = id;
+            TripleDES = new TripleDES();
             History.TryAdd(Constants.SelfChatID, new List<byte[]>());
         }
 
         public void SendIfOnline(Message message)
         {
             message.Timestamp = DateTime.UtcNow;
-            if (message.SenderID != ID && IsOnline)
+            bool isOnline;
+            lock (IsOnlineLock)
             {
-                SendMessage(message, Socket);
+                isOnline = IsOnline;
             }
+            if (message.SenderID != ID && isOnline)
+            {
+                lock (sendLock)
+                {
+                    SendMessage(message, Socket, TripleDES);
+                }
+            }
+            
             if (message is ChatMessage userMessage)
             {
                 SaveToHistory(userMessage);

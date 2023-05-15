@@ -13,7 +13,7 @@ namespace Common.Encryption
         protected const int SubkeySize = 48;
         protected const int RoundsNumber = 16;
 
-        #region Permutation tables and S-boxes (WITH VULNERABILITIES LEFT BY THE AMERICANS)
+        #region Permutation tables and S-boxes
 
         private readonly int[] InitialPermutation = new int[BlockSize] {
             57, 49, 41, 33, 25, 17, 9, 1,
@@ -145,8 +145,19 @@ namespace Common.Encryption
 
         private BitsArray[] subkeys = new BitsArray[RoundsNumber];
         private BitsArray[] reversedSubkeys = new BitsArray[RoundsNumber];
-        private byte[] key = new byte[KeySize / sizeof(byte)];
+        private byte[] key = new byte[KeySize / 8];
         private BitsArray keyBits = new();
+
+        public byte[] Key
+        {
+            get { return key; }
+            set
+            {
+                key = value;
+                keyBits = new BitsArray(key);
+                GenerateSubkeys(keyBits);
+            }
+        }
 
         protected BitsArray Permutation(BitsArray block, int[] permutationArray)
         {
@@ -161,20 +172,20 @@ namespace Common.Encryption
         protected void AddUpTo64BitsBoundary(ref byte[] bytes)
         {
             int length = bytes.Length;
-            if (length % sizeof(byte) != 0)
+            if (length % 8 != 0)
             {
-                Array.Resize(ref bytes, length + sizeof(byte) - length % sizeof(byte));
+                Array.Resize(ref bytes, length + 8 - length % 8);
             }
         }
 
         protected List<BitsArray> SplitIntoBlocks(byte[] bytes)
         {
             AddUpTo64BitsBoundary(ref bytes);
-            List<BitsArray> blocks = new List<BitsArray>(bytes.Length / sizeof(byte));
-            for (int i = 0; i < bytes.Length / sizeof(byte); i++)
+            List<BitsArray> blocks = new List<BitsArray>(bytes.Length / 8);
+            for (int i = 0; i < bytes.Length / 8; i++)
             {
-                int blockStart = i * sizeof(byte);
-                int blockEnd = blockStart + sizeof(byte);
+                int blockStart = i * 8;
+                int blockEnd = blockStart + 8;
                 byte[] bytesBlock = bytes[blockStart..blockEnd];
                 blocks.Add(new BitsArray(bytesBlock));
             }
@@ -203,15 +214,9 @@ namespace Common.Encryption
                     half1 == 0xFEE0FEE0u && half2 == 0xFEF1FEF1u);
         }
 
-        public virtual byte[] Encrypt(byte[] bytes, byte[] key, bool decrypt = false)
+        public virtual byte[] Encrypt(byte[] bytes, bool decrypt = false)
         {
             List<BitsArray> blocks = SplitIntoBlocks(bytes);
-            if (key != this.key)
-            {
-                this.key = key;
-                keyBits = new BitsArray(key);
-                GenerateSubkeys(keyBits);
-            }
             var subkeysInOrder = decrypt ? reversedSubkeys : subkeys;
             for (int i = 0; i < blocks.Count; i++)
             {
@@ -222,13 +227,13 @@ namespace Common.Encryption
 
         public virtual byte[] GenerateKey()
         {
-            byte[] key = new byte[KeySize / sizeof(byte)];
+            byte[] key = new byte[KeySize / 8];
             var random = new Random();
             for (int i = 0; i < key.Length; i++)
             {
                 key[i] = (byte)random.Next(128);
                 int onesCount = 0;
-                for (int j = 0; j < sizeof(byte) - 1; j++)
+                for (int j = 0; j < 7; j++)
                 {
                     onesCount += key[i] & (1 << j);
                 }

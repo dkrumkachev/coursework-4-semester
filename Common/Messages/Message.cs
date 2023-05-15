@@ -8,6 +8,9 @@ using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using static Common.Encryption.Encryption;
+using Org.BouncyCastle.Crypto.Parameters;
+using Org.BouncyCastle.Math;
+using Org.BouncyCastle.Math.EC;
 
 namespace Common.Messages
 {
@@ -79,17 +82,18 @@ namespace Common.Messages
     {
         public List<int> Members { get; }
 
-        public (int Count, BigInteger PublicKey)[] PublicKeys { get; }
+        public (int Count, ECPoint? PublicKey)[] PublicKeys { get; }
 
-        public DHParameters DHParams { get; set; }
+        public ECDomainParameters DomainParams { get; set; }
 
         public int HopsNumber { get; set; }
 
-        public ChatCreationMessage(List<int> users, int senderID) : base(chatID: 0, senderID)
+        public ChatCreationMessage(List<int> users, int senderID, ECDomainParameters domainParams) : base(chatID: 0, senderID)
         {
             Members = users;
-            PublicKeys = new (int, BigInteger)[users.Count];
-            Array.Fill(PublicKeys, (0, 0));
+            PublicKeys = new (int, ECPoint?)[users.Count];
+            DomainParams = domainParams;
+            Array.Fill(PublicKeys, (0, null));
         }
 
         /* Client: 
@@ -98,7 +102,7 @@ namespace Common.Messages
             if (PublicKeys[i].Count == 0)
             {
                 PublicKeys[i].Count = 1;
-                PublicKeys[i].PublicKey = g ^ privateKey;
+                PublicKeys[i].PublicKey = domainParams.G.Multiply(private);
                 break;
             }
             if (PublicKeys[i].Count != -1)
@@ -106,13 +110,13 @@ namespace Common.Messages
                 PublicKeys[i].Count += 1;
                 if (PublicKeys[i].Count == Users.Count) 
                 {
-                    CryptoKey = PublicKeys[i].PublicKey ^ privateKey;
+                    SharedSecret = PublicKeys[i].PublicKey.Multiply(private);
                     PublicKeys[i].Count = -1;
                     PublicKeys[i].PublicKey = 0;
                 }
                 else
                 {
-                    PublicKeys[i].PublicKey ^= privateKey;
+                    PublicKeys[i].PublicKey = PublicKeys[i].PublicKey.Multiply(private);
                 }
             }
         }*/
@@ -141,25 +145,32 @@ namespace Common.Messages
         {
             Connecting,
             Disconnecting,
-            DiffieHellman,
             Success,
             Error
         }
-
-        public DHParameters DHParameters { get; set; }
 
         public byte[]? AdditionalInfo { get; set; }
 
         public Type MessageType { get; }
 
-        public ServiceMessage(int senderID, Type messageType, byte[]? additionalInfo = null, 
-            DHParameters DHParams = default) : base(senderID)
+        public ServiceMessage(int senderID, Type messageType, byte[]? additionalInfo = null) : base(senderID)
         {
             MessageType = messageType;
             AdditionalInfo = additionalInfo;
-            DHParameters = DHParams;
         }
+    }
 
+    public class ECDHMessage : Message 
+    {
+        public ECDomainParameters DomainParameters { get; }
+        
+        public ECPoint PublicKey { get; set; }
+
+        public ECDHMessage (int senderID, ECDomainParameters domainParameters, ECPoint publicKey) : base(senderID)
+        {
+            DomainParameters = domainParameters;
+            PublicKey = publicKey;
+        }
     }
 
     public class UserInfoMessage : Message

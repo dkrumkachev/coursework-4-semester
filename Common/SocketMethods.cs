@@ -6,13 +6,13 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
+using Common.Encryption;
 using Common.Messages;
 
 namespace Common
 {
     public static class SocketMethods
     {
-        private static readonly object sendLock = new object();
 
         public static bool IsConnected(Socket socket)
         {
@@ -20,7 +20,7 @@ namespace Common
             return !(socket.Poll(TimeToWait, SelectMode.SelectRead) && socket.Available == 0);
         }
 
-        public static Message ReceiveMessage(Socket socket)
+        public static Message ReceiveMessage(Socket socket, TripleDES? tripleDES = null)
         {
             int size = ReceiveSize(socket);
             byte[] bytes = new byte[size];
@@ -36,6 +36,10 @@ namespace Common
                 Buffer.BlockCopy(buffer, 0, bytes, received, bytesRead);
                 received += bytesRead;
             }
+            if (tripleDES != null)
+            {
+                bytes = tripleDES.Encrypt(bytes, decrypt: true);
+            }
             return JsonSerializer.Deserialize<Message>(bytes) ?? throw new InvalidDataException();
         }
 
@@ -46,20 +50,21 @@ namespace Common
             return BitConverter.ToInt32(size, 0);
         }
 
-        public static void SendMessage(Message message, Socket socket)
+        public static void SendMessage(Message message, Socket socket, TripleDES? tripleDES = null)
         {
             byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(message);
-            lock (sendLock)
+            if (tripleDES != null)
             {
-                socket.Send(BitConverter.GetBytes(bytes.Length));
-                int start = 0;
-                while (start + Constants.TransferBlockSize < bytes.Length)
-                {
-                    socket.Send(bytes[start..(start + Constants.TransferBlockSize)]);
-                    start += Constants.TransferBlockSize;
-                }
-                socket.Send(bytes[start..]);
+                bytes = tripleDES.Encrypt(bytes);
             }
+            socket.Send(BitConverter.GetBytes(bytes.Length));
+            int start = 0;
+            while (start + Constants.TransferBlockSize < bytes.Length)
+            {
+                socket.Send(bytes[start..(start + Constants.TransferBlockSize)]);
+                start += Constants.TransferBlockSize;
+            }
+            socket.Send(bytes[start..]);
         }
     }
 }
