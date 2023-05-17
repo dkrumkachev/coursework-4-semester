@@ -30,10 +30,11 @@ namespace Server
 
         private IPAddress GetLocalIPv4()
         {
+            return IPAddress.Parse(Constants.ServerIP);
             foreach (NetworkInterface item in NetworkInterface.GetAllNetworkInterfaces())
             {
-                if ((item.NetworkInterfaceType == NetworkInterfaceType.Ethernet ||
-                    item.NetworkInterfaceType == NetworkInterfaceType.Wireless80211) &&
+                if ((item.NetworkInterfaceType == NetworkInterfaceType.Wireless80211 ||
+                    item.NetworkInterfaceType == NetworkInterfaceType.Ethernet) &&
                     item.OperationalStatus == OperationalStatus.Up)
                 {
                     foreach (UnicastIPAddressInformation ip in item.GetIPProperties().UnicastAddresses)
@@ -54,6 +55,7 @@ namespace Server
             try
             {
                 socket.Bind(new IPEndPoint(ipAddress, Constants.ServerPort));
+                Console.WriteLine($"The server started at: {socket.LocalEndPoint?.ToString()}");
             }
             catch (SocketException)
             {
@@ -64,6 +66,7 @@ namespace Server
 
         public void Run()
         {
+            //Sql.DeleteUser("dkrumkachev");
             try
             {
                 BindSocketToThisMachine(server);
@@ -71,6 +74,11 @@ namespace Server
             catch (SocketException) 
             {
                 return;
+            }
+            List<Sql.UserRecord> users = Sql.GetAllUsers();
+            foreach (Sql.UserRecord user in users)
+            {
+                clients.TryAdd(user.ID, new Client(user.ID, user.Name));
             }
             server.Listen(MaxConnectionsQueueSize);
             Console.WriteLine("The server is waiting for connections . . .");
@@ -81,13 +89,13 @@ namespace Server
         {
             while (true)
             {
-                Task.Run(CommunicateWithClient);
+                Socket clientSocket = server.Accept();
+                Task.Run(() => CommunicateWithClient(clientSocket));
             }
         }
 
-        private void CommunicateWithClient()
+        private void CommunicateWithClient(Socket clientSocket)
         {
-            Socket clientSocket = server.Accept();
             try
             {
                 if (((ServiceMessage)ReceiveMessage(clientSocket)).MessageType != ServiceMessage.Type.Connecting)
@@ -104,31 +112,27 @@ namespace Server
                     HandleMessage(message);
                 }
             }
-            catch {}
-            finally
+            catch (Exception e)
             {
-
+                Console.WriteLine(e.StackTrace);
+            }
+            finally
+            { 
                 clientSocket.Close();
             }
-
         }
 
         private TripleDES KeyExchange(Socket client)
         {
-            ECDomainParameters domainParams = Encryption.GetDomainParams();
             BigInteger privateKey = Encryption.GeneratePrivateKey();
-            ECPoint serverPublicKey = domainParams.G.Multiply(privateKey);
-            SendMessage(new ECDHMessage(ServerID, domainParams, serverPublicKey), client);
+            byte[] serverPublicKey = Encryption.GetPublicKey(privateKey);
+            SendMessage(new ECDHMessage(ServerID, serverPublicKey), client);
             var response = (ECDHMessage)ReceiveMessage(client);
-            byte[] sharedKey = Encryption.GetSharedSecretBytes(response.PublicKey, TripleDES.KeySize);
-            var tripleDES = new TripleDES
-            {
-                Key = sharedKey
-            };
+            byte[] sharedKey = Encryption.MultiplyByPrivateKey(response.PublicKey, privateKey);
+            var tripleDES = new TripleDES { Key = sharedKey };
             SendSuccessMessage(client, tripleDES);
             return tripleDES;
         }
-
 
         private Client ClientAuthentication(Socket clientSocket, TripleDES tripleDES)
         {
@@ -152,7 +156,7 @@ namespace Server
 
         private Client SignUp(Socket clientSocket, AuthenticationMessage message, TripleDES tripleDES)
         {
-            int newUserID = Sql.AddUser(message.Email, message.Password);
+            int newUserID = Sql.AddUser(message.Username, message.Password, message.Username);
             SendMessage(new UserInfoMessage(ServerID, newUserID), clientSocket, tripleDES);
             var userInfo = (UserInfoMessage)ReceiveMessage(clientSocket, tripleDES);
             var client = new Client(clientSocket, userInfo.Name, newUserID);
@@ -163,12 +167,18 @@ namespace Server
         
         private Client SignIn(Socket clientSocket, AuthenticationMessage message, TripleDES tripleDES)
         {
-            int userID = Sql.FindUser(message.Email, message.Password);
-            Client client = clients[userID];
-            var userInfoMessage = new UserInfoMessage(ServerID, userID, client.Name);
+            Sql.UserRecord user = Sql.GetUserByUsername(message.Username);
+            if (user.ID == 0)
+            {
+                throw new ArgumentException("User not found");
+            }
+            if (user.Password != message.Password)
+            {
+                throw new ArgumentException("Incorrect password");
+            }
+            Client client = clients[user.ID];
+            var userInfoMessage = new UserInfoMessage(ServerID, user.ID, client.Name, true);
             SendMessage(userInfoMessage, clientSocket, tripleDES);
-            // send chats and keys
-            SendSuccessMessage(clientSocket, tripleDES);
             return client;
         }
 
@@ -254,7 +264,7 @@ namespace Server
             message.ChatID = chatID;
         }
 
-        private bool IsKeyExchangeCompleted((int Count, ECPoint? PublicKey)[] publicKeys)
+        private bool IsKeyExchangeCompleted((int Count, byte[] PublicKey)[] publicKeys)
         {
             for (var i = 0; i < publicKeys.Length; i++)
             {

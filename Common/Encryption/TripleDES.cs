@@ -1,4 +1,5 @@
 ﻿using Common.Encryption;
+using Org.BouncyCastle.Crypto.Paddings;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,8 +14,6 @@ namespace Common.Encryption
     {
         private const int KeysNumber = 3;
         public new const int KeySize = DES.KeySize * KeysNumber;
-        public new const int EffectiveKeySize = DES.EffectiveKeySize * KeysNumber;
-
         private byte[] key = new byte[KeySize / 8];
         private BitsArray keyBits = new();
         private readonly BitsArray[][] subkeys = new BitsArray[KeysNumber][];
@@ -25,6 +24,10 @@ namespace Common.Encryption
             get { return key; }
             set
             {
+                if (value.Length > KeySize / 8)
+                {
+                    value = value[..(KeySize / 8)];
+                }
                 key = value;
                 keyBits = new BitsArray(key);
                 GenerateSubkeysArray(keyBits);

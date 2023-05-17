@@ -10,6 +10,8 @@ using Org.BouncyCastle.Math.EC;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Asn1.Nist;
 using Org.BouncyCastle.Asn1.X9;
+using Org.BouncyCastle.Crypto.Paddings;
+using Org.BouncyCastle.Security;
 
 namespace Common.Encryption
 {
@@ -17,13 +19,9 @@ namespace Common.Encryption
     {
         public const int ECDHKeySize = 32;
         public const string ECName = "P-256";
-        
-        public static ECDomainParameters GetDomainParams()
-        {
-            X9ECParameters curveParams = NistNamedCurves.GetByName(ECName);
-            return new ECDomainParameters(curveParams.Curve, curveParams.G, curveParams.N, curveParams.H);
-
-        }
+        private static readonly X9ECParameters curveParams = NistNamedCurves.GetByName(ECName);
+        private static readonly ECDomainParameters domainParams = 
+            new (curveParams.Curve, curveParams.G, curveParams.N, curveParams.H);
 
         public static BigInteger GeneratePrivateKey()
         {
@@ -33,17 +31,17 @@ namespace Common.Encryption
             return new BigInteger(1, privateKeyBytes);
         }
 
-        public static byte[] GetSharedSecretBytes(ECPoint sharedSecret, int keySize)
+        public static byte[] GetPublicKey(BigInteger privateKey)
         {
-            byte[] bytes = sharedSecret.Normalize().XCoord.GetEncoded();
-            return bytes[..keySize];
+            ECPoint publicKey = domainParams.G.Multiply(privateKey);
+            return publicKey.GetEncoded();
         }
 
-
-
-        public static byte[] KeyFromBigInteger(BigInteger number, int size)
+        public static byte[] MultiplyByPrivateKey(byte[] publicKey, BigInteger privateKey)
         {
-            return new byte[size];
+            ECPoint publicKeyPoint = curveParams.Curve.DecodePoint(publicKey);
+            byte[] sharedKey = publicKeyPoint.Multiply(privateKey).GetEncoded();
+            return sharedKey[..(TripleDES.KeySize / 8)];
         }
 
         public static string SHA256Hash(byte[] bytes)

@@ -9,7 +9,7 @@ namespace Common.Encryption
     {
         public const int BlockSize = 64;
         public const int KeySize = 64;
-        public const int EffectiveKeySize = 56;
+        protected const int EffectiveKeySize = 56;
         protected const int SubkeySize = 48;
         protected const int RoundsNumber = 16;
 

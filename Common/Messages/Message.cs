@@ -11,16 +11,12 @@ using static Common.Encryption.Encryption;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Math;
 using Org.BouncyCastle.Math.EC;
+using Org.BouncyCastle.Crypto.Paddings;
+using System.Xml.Serialization;
 
-namespace Common.Messages
+namespace Common.Messages 
 {
-    [JsonDerivedType(typeof(ChatMessage), typeDiscriminator: "chat")]
-    [JsonDerivedType(typeof(MessageWithContents), typeDiscriminator: "withContacts")]
-    [JsonDerivedType(typeof(FileMessage), typeDiscriminator: "file")]
-    [JsonDerivedType(typeof(FileInfo), typeDiscriminator: "fileInfo")]
-    [JsonDerivedType(typeof(ChatCreationMessage), typeDiscriminator: "chatCreation")]
-    [JsonDerivedType(typeof(AuthenticationMessage), typeDiscriminator: "authentication")]
-    [JsonDerivedType(typeof(ServiceMessage), typeDiscriminator: "service")]
+    [Serializable]
     public abstract class Message
     {
         public int SenderID { get; }
@@ -32,7 +28,8 @@ namespace Common.Messages
             SenderID = senderID;
         }
     }
-
+    
+    [Serializable]
     public class ChatMessage : Message
     {
         public int ChatID { get; set; }
@@ -43,27 +40,39 @@ namespace Common.Messages
         }
     }
 
+    [Serializable]
     public class MessageWithContents : ChatMessage
     {
+        public enum Type
+        {
+            Text, Image, File
+        }
+
+        public Type ContentsType { get; }
+
         public byte[] Contents { get; }
 
-        public MessageWithContents(byte[] contents, int chatID, int senderID) : base(chatID, senderID)
+        public MessageWithContents(byte[] contents, Type contentsType, int chatID, int senderID) 
+            : base(chatID, senderID)
         {
             Contents = contents;
+            ContentsType = contentsType;
         }
     }
 
+    [Serializable]
     public class FileMessage : MessageWithContents
     {
         public string FileName { get; }
 
         public FileMessage(string fileName, byte[] contents, int chatID, int senderID) 
-            : base(contents, chatID, senderID)
+            : base(contents, Type.File, chatID, senderID)
         {
             FileName = fileName;
         }
     }
 
+    [Serializable]
     public class FileInfoMessage : ChatMessage
     {
         public string FileID { get; }
@@ -78,67 +87,41 @@ namespace Common.Messages
         }
     }
 
+    [Serializable]
     public class ChatCreationMessage : ChatMessage 
     {
         public List<int> Members { get; }
 
-        public (int Count, ECPoint? PublicKey)[] PublicKeys { get; }
-
-        public ECDomainParameters DomainParams { get; set; }
+        public (int Count, byte[] PublicKey)[] PublicKeys { get; }
 
         public int HopsNumber { get; set; }
 
-        public ChatCreationMessage(List<int> users, int senderID, ECDomainParameters domainParams) : base(chatID: 0, senderID)
+        public ChatCreationMessage(List<int> users, int senderID) : base(chatID: 0, senderID)
         {
             Members = users;
-            PublicKeys = new (int, ECPoint?)[users.Count];
-            DomainParams = domainParams;
-            Array.Fill(PublicKeys, (0, null));
+            PublicKeys = new (int, byte[])[users.Count];
+            Array.Fill(PublicKeys, (0, Array.Empty<byte>()));
         }
-
-        /* Client: 
-        for (var i = 0; i < PublicKeys.Length; i++)
-        {
-            if (PublicKeys[i].Count == 0)
-            {
-                PublicKeys[i].Count = 1;
-                PublicKeys[i].PublicKey = domainParams.G.Multiply(private);
-                break;
-            }
-            if (PublicKeys[i].Count != -1)
-            {
-                PublicKeys[i].Count += 1;
-                if (PublicKeys[i].Count == Users.Count) 
-                {
-                    SharedSecret = PublicKeys[i].PublicKey.Multiply(private);
-                    PublicKeys[i].Count = -1;
-                    PublicKeys[i].PublicKey = 0;
-                }
-                else
-                {
-                    PublicKeys[i].PublicKey = PublicKeys[i].PublicKey.Multiply(private);
-                }
-            }
-        }*/
-
     }
 
+    [Serializable]
     public class AuthenticationMessage : Message
     {
         public bool IsSigningUp { get; }
 
-        public string Email { get; }
+        public string Username { get; }
 
         public string Password { get; }
 
-        public AuthenticationMessage(int senderID, bool signingUp, string email, string password) : base(senderID)
+        public AuthenticationMessage(int senderID, bool signingUp, string login, string password) : base(senderID)
         {
             IsSigningUp = signingUp;
-            Email = email;
+            Username = login;
             Password = password;
         }
     }
 
+    [Serializable]
     public class ServiceMessage : Message
     {
         public enum Type
@@ -158,30 +141,28 @@ namespace Common.Messages
             MessageType = messageType;
             AdditionalInfo = additionalInfo;
         }
+
     }
 
+    [Serializable]
     public class ECDHMessage : Message 
     {
-        public ECDomainParameters DomainParameters { get; }
-        
-        public ECPoint PublicKey { get; set; }
+        public byte[] PublicKey { get; set; }
 
-        public ECDHMessage (int senderID, ECDomainParameters domainParameters, ECPoint publicKey) : base(senderID)
+        public ECDHMessage (int senderID, byte[] publicKey) : base(senderID)
         {
-            DomainParameters = domainParameters;
             PublicKey = publicKey;
         }
     }
 
+    [Serializable]
     public class UserInfoMessage : Message
     {
         public int UserID { get; }
-        
+
         public string Name { get; }
 
-        public bool IsOnline { get; }
-
-        public Dictionary<int, List<int>> Chats { get; }
+        public bool IsOnline { get; } = true;
 
         public UserInfoMessage(int senderID, int userID, string name = "", bool isOnline = true) : base(senderID)
         {
@@ -190,7 +171,4 @@ namespace Common.Messages
             IsOnline = isOnline;
         }
     }
-
-
-
 }

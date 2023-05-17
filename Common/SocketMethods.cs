@@ -2,12 +2,14 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Sockets;
+using System.Runtime.Serialization.Formatters.Binary;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Common.Encryption;
 using Common.Messages;
+using Org.BouncyCastle.Crypto.Paddings;
 
 namespace Common
 {
@@ -40,19 +42,22 @@ namespace Common
             {
                 bytes = tripleDES.Encrypt(bytes, decrypt: true);
             }
-            return JsonSerializer.Deserialize<Message>(bytes) ?? throw new InvalidDataException();
+            return Deserialize(bytes);
         }
 
         public static int ReceiveSize(Socket socket)
         {
-            byte[] size = new byte[sizeof(int)];
-            socket.Receive(size);
-            return BitConverter.ToInt32(size, 0);
+            byte[] bytes = new byte[sizeof(int)];
+            if (socket.Receive(bytes) == 0) 
+            {
+                throw new SocketException();
+            }
+            return BitConverter.ToInt32(bytes, 0);
         }
 
         public static void SendMessage(Message message, Socket socket, TripleDES? tripleDES = null)
         {
-            byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(message);
+            byte[] bytes = Serialize(message);
             if (tripleDES != null)
             {
                 bytes = tripleDES.Encrypt(bytes);
@@ -66,5 +71,23 @@ namespace Common
             }
             socket.Send(bytes[start..]);
         }
+
+#pragma warning disable SYSLIB0011
+        private static byte[] Serialize(Message message)
+        {
+            var serializer = new BinaryFormatter();
+            using var stream = new MemoryStream();
+            serializer.Serialize(stream, message);
+            return stream.ToArray();
+        }
+
+        private static Message Deserialize(byte[] bytes)
+        {
+            var serializer = new BinaryFormatter();
+            using var stream = new MemoryStream(bytes);
+            return (Message)serializer.Deserialize(stream);
+        }
+#pragma warning restore SYSLIB0011
+
     }
 }

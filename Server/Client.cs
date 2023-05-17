@@ -1,6 +1,7 @@
 ﻿using Common;
 using Common.Encryption;
 using Common.Messages;
+using Org.BouncyCastle.Bcpg;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -43,6 +44,15 @@ namespace Server
             History.TryAdd(Constants.SelfChatID, new List<byte[]>());
         }
 
+        public Client(int id, string name)
+        {
+            Socket = new Socket(Constants.AddressFamily, Constants.SocketType, Constants.ProtocolType);
+            Name = name;
+            ID = id;
+            TripleDES = new TripleDES();
+            History.TryAdd(Constants.SelfChatID, new List<byte[]>());
+        }
+
         public void SendIfOnline(Message message)
         {
             message.Timestamp = DateTime.UtcNow;
@@ -58,7 +68,6 @@ namespace Server
                     SendMessage(message, Socket, TripleDES);
                 }
             }
-            
             if (message is ChatMessage userMessage)
             {
                 SaveToHistory(userMessage);

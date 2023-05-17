@@ -26,7 +26,7 @@ namespace Client
             richTextBox1.SelectedText = a + "\n";
             richTextBox1.ScrollToCaret();
             richTextBox1.SelectedText = "\n";
-
+            Text = SystemInformation.CaptionHeight.ToString();
         }
 
         private void button2_Click(object sender, EventArgs e)

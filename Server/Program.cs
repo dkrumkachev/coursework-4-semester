@@ -1,8 +1,14 @@
 ﻿using System;
+using System.Data.SqlClient;
 using System.Linq;
+using System.Net;
+using System.Reflection.PortableExecutable;
+using System.Runtime.Serialization.Formatters.Binary;
 using System.Text;
 using System.Text.Json;
+using System.Xml.Serialization;
 using Common.Encryption;
+using Common.Messages;
 using Org.BouncyCastle.Asn1.Nist;
 using Org.BouncyCastle.Asn1.X9;
 using Org.BouncyCastle.Crypto.Parameters;
@@ -16,79 +22,55 @@ namespace Server
     {
         static void Main(string[] args)
         {
-            //Server server = new Server();
-            //server.Run();
-            X9ECParameters curveParams = NistNamedCurves.GetByName("P-256");
+            Server server = new Server();
+            server.Run();
+            /*string SqlConnectionString =
+                "Server=localhost\\SQLEXPRESS;Database=Coursework;Trusted_Connection=True;";
+            using var connection = new SqlConnection(SqlConnectionString);
+            connection.Open();
+            SqlCommand command = new SqlCommand("EXEC sp_rename 'Users.email', 'username', 'COLUMN'", connection);
+            command.ExecuteNonQuery();
+            connection.Close();*/
+
+            /*X9ECParameters curveParams = NistNamedCurves.GetByName("P-256");
             ECDomainParameters domainParams = new ECDomainParameters(curveParams.Curve, curveParams.G, curveParams.N, curveParams.H);
+
+            X9ECParameters curveParams2 = NistNamedCurves.GetByName("P-256");
+            ECDomainParameters domainParams2 = new ECDomainParameters(curveParams.Curve, curveParams.G, curveParams.N, curveParams.H);
 
             byte[] alicePrivateKeyBytes = new byte[32];
             byte[] bobPrivateKeyBytes = new byte[32];
-            byte[] carolPrivateKeyBytes = new byte[32];
 
             var random = new Random();
             random.NextBytes(alicePrivateKeyBytes);
             random.NextBytes(bobPrivateKeyBytes);
-            random.NextBytes(carolPrivateKeyBytes);
 
             BigInteger alicePrivateKey = new BigInteger(1, alicePrivateKeyBytes);
             BigInteger bobPrivateKey = new BigInteger(1, bobPrivateKeyBytes);
-            BigInteger carolPrivateKey = new BigInteger(1, carolPrivateKeyBytes);
 
             ECPoint alicePublicKey = domainParams.G.Multiply(alicePrivateKey); //a
-            ECPoint ab = alicePublicKey.Multiply(bobPrivateKey); //b
-            ECPoint bobPublicKey = domainParams.G.Multiply(bobPrivateKey); //b
-            ECPoint abc = ab.Multiply(carolPrivateKey); //c
-            ECPoint bc = bobPublicKey.Multiply(carolPrivateKey); //c
-            ECPoint carolPublicKey = domainParams.G.Multiply(carolPrivateKey); //c
-            ECPoint bca = bc.Multiply(alicePrivateKey); //a
-            ECPoint ca = carolPublicKey.Multiply(alicePrivateKey); //a
-            ECPoint cab = ca.Multiply(bobPrivateKey); //b
+            var encoded1 = alicePublicKey.GetEncoded();
+            ECPoint bobPublicKey = domainParams2.G.Multiply(bobPrivateKey); //b
+            var encoded2 = bobPublicKey.GetEncoded();
+            var decoded1 = curveParams.Curve.DecodePoint(encoded1);
+            var decoded2 = curveParams.Curve.DecodePoint(encoded2);
+            ECPoint sharedKey1 = decoded1.Multiply(bobPrivateKey); //b
+            encoded1 = sharedKey1.GetEncoded();
+            ECPoint sharedKey2 = decoded2.Multiply(alicePrivateKey); //b
+            encoded2 = sharedKey2.GetEncoded();
+            decoded1 = curveParams.Curve.DecodePoint(encoded1);
+            decoded2 = curveParams.Curve.DecodePoint(encoded2);
 
-
-            byte[] shared1 = abc.Normalize().XCoord.GetEncoded();
-            byte[] shared2 = bca.Normalize().XCoord.GetEncoded();
-            byte[] shared3 = cab.Normalize().XCoord.GetEncoded();
-            
-
-            if (shared1.SequenceEqual(shared2) && shared2.SequenceEqual(shared3))
-            {
-                Console.WriteLine(shared1.Length);
-            }
-            else
-            {
-                Console.WriteLine("Error: shared secrets do not match.");
-            }
-
-            TripleDES des = new TripleDES();
-            des.Key = new byte[TripleDES.KeySize / 8];
-            random = new Random();
-            random.NextBytes(des.Key);
-            BitsArray qa = new BitsArray(5);
-            byte[] q = JsonSerializer.SerializeToUtf8Bytes(qa);
-            Console.WriteLine(Encoding.UTF8.GetString(q));
-            foreach (var b in q)
+            foreach (var b in decoded1.GetEncoded())
             {
                 Console.Write(b + " ");
             }
             Console.WriteLine();
-            byte[] a = des.Encrypt(q);
-            a = des.Encrypt(a, true);
-            for (int i = 0; i < a.Length; i++)
-            {
-                if (a[i] == 0) 
-                {
-                    a = a[..i];
-                    break;
-                }
-            }
-            Console.WriteLine(Encoding.UTF8.GetString(a));
-
-            BitsArray qw = JsonSerializer.Deserialize<BitsArray>(a) ?? throw new Exception();
-            Console.WriteLine(qw.Equals(qa));
-            foreach (var b in a)
+            foreach (var b in decoded2.GetEncoded())
             {
                 Console.Write(b + " ");
             }
+*/
         }
     }
 }
