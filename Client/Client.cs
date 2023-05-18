@@ -25,7 +25,7 @@ namespace Client
     {
         private readonly Socket server = new(Constants.AddressFamily, Constants.SocketType, Constants.ProtocolType);
         private int selfID;
-        private string selfName = string.Empty;
+        public string SelfName { get; set; } = string.Empty;
         private readonly TripleDES server3DES = new();
         private readonly Dictionary<int, Chat> chats = new();
 
@@ -35,24 +35,22 @@ namespace Client
             server.Close();
         }
 
-        public bool ConnectToServer() 
+        public void WaitForConnectionToServer() 
         {
-            bool success;
-            try
+            bool success = false;
+            while (!success)
             {
-                server.Connect(IPAddress.Parse(Constants.ServerIP), Constants.ServerPort);
-                SendMessage(new ServiceMessage(0, ServiceMessage.Type.Connecting), server);
-                success = KeyExchange(server);
+                try
+                {
+                    server.Connect(IPAddress.Parse(Constants.ServerIP), Constants.ServerPort);
+                    SendMessage(new ServiceMessage(0, ServiceMessage.Type.Connecting), server);
+                    success = KeyExchange(server);
+                }
+                catch
+                {
+                    success = false;
+                }
             }
-            catch
-            {
-                success = false;
-            }
-            if (!success)
-            {
-                server.Close();
-            }
-            return success;
         }
 
         private bool KeyExchange(Socket server)
@@ -81,7 +79,7 @@ namespace Client
             }
             var userInfoMessage = (UserInfoMessage)message;
             selfID = userInfoMessage.UserID;
-            selfName = userInfoMessage.Name;
+            SelfName = userInfoMessage.Name;
             return true;
         }
 
@@ -91,7 +89,7 @@ namespace Client
             var successMessage = (ServiceMessage)ReceiveMessage(server, server3DES);
             if (successMessage.MessageType == ServiceMessage.Type.Success)
             {
-                selfName = name;
+                SelfName = name;
                 return true;
             }
             return false;

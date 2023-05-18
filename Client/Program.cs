@@ -6,7 +6,7 @@ namespace Client
         static void Main()
         {
             ApplicationConfiguration.Initialize();
-            Application.Run(new AuthenticationForm());
+            Application.Run(new MainForm());
         }
     }
 }

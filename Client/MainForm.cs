@@ -9,8 +9,17 @@ namespace Client
         public MainForm()
         {
             InitializeComponent();
+            Size = new Size(1600, 900);
+
         }
 
+        private void CenterControl(Control control)
+        {
+            control.Location = new Point((ClientSize.Width - control.Width) / 2,
+                (ClientSize.Height - control.Height) / 2);
+        }
+
+        #region
         private void button1_Click(object sender, EventArgs e)
         {
             var a = textBox1.Text;
@@ -117,5 +126,15 @@ namespace Client
             richTextBox1.SelectedText = "\n";
             richTextBox1.ScrollToCaret();
         }
+        #endregion
+
+        private void MainForm_Shown(object sender, EventArgs e)
+        {
+            CenterControl(authenticationPanel);
+            CenterControl(nameInputPanel);
+            CenterControl(loadingLabel);
+        }
+
+       
     }
 }
