@@ -27,6 +27,8 @@ namespace Server
 
         public string Name { get; set; }
 
+        public string Username { get; }
+
         public int ID { get; }
 
         public TripleDES TripleDES { get; set; }
@@ -35,19 +37,21 @@ namespace Server
 
         public ConcurrentDictionary<int, List<byte[]>> History { get; } = new();
 
-        public Client(Socket socket, string name, int id)
+        public Client(Socket socket, string name, string username, int id)
         {
             Socket = socket;
             Name = name;
+            Username = username;
             ID = id;
             TripleDES = new TripleDES();
             History.TryAdd(Constants.SelfChatID, new List<byte[]>());
         }
 
-        public Client(int id, string name)
+        public Client(int id, string name, string username)
         {
             Socket = new Socket(Constants.AddressFamily, Constants.SocketType, Constants.ProtocolType);
             Name = name;
+            Username = username;
             ID = id;
             TripleDES = new TripleDES();
             History.TryAdd(Constants.SelfChatID, new List<byte[]>());
@@ -76,10 +80,16 @@ namespace Server
 
         public void SaveToHistory(ChatMessage message)
         {
-            if (message is not FileMessage && History.TryGetValue(message.ChatID, out List<byte[]>? chatHistory))
+            if (message is FileMessage fileMessage && fileMessage.Contents.Length != 0)
             {
-                chatHistory.Add(JsonSerializer.SerializeToUtf8Bytes(message));
+                return;
             }
+            if (!History.TryGetValue(message.ChatID, out List<byte[]>? chatHistory))
+            {
+                History.TryAdd(message.ChatID, new List<byte[]>());
+            }
+            byte[] serializedMessage = Message.Serialize(message);
+            History[message.ChatID].Add(serializedMessage);
         }
 
     }

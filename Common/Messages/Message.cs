@@ -13,13 +13,15 @@ using Org.BouncyCastle.Math;
 using Org.BouncyCastle.Math.EC;
 using Org.BouncyCastle.Crypto.Paddings;
 using System.Xml.Serialization;
+using Org.BouncyCastle.Crypto.Tls;
+using System.Runtime.Serialization.Formatters.Binary;
 
 namespace Common.Messages 
 {
     [Serializable]
     public abstract class Message
     {
-        public int SenderID { get; }
+        public int SenderID { get; set; }
 
         public DateTime Timestamp { get; set; }
 
@@ -27,8 +29,26 @@ namespace Common.Messages
         {
             SenderID = senderID;
         }
+
+#pragma warning disable SYSLIB0011
+        public static byte[] Serialize(Message message)
+        {
+            var serializer = new BinaryFormatter();
+            using var stream = new MemoryStream();
+            serializer.Serialize(stream, message);
+            return stream.ToArray();
+        }
+
+        public static Message Deserialize(byte[] bytes)
+        {
+            var serializer = new BinaryFormatter();
+            using var stream = new MemoryStream(bytes);
+            return (Message)serializer.Deserialize(stream);
+        }
+#pragma warning restore SYSLIB0011
+
     }
-    
+
     [Serializable]
     public class ChatMessage : Message
     {
@@ -50,7 +70,7 @@ namespace Common.Messages
 
         public Type ContentsType { get; }
 
-        public byte[] Contents { get; }
+        public byte[] Contents { get; set; }
 
         public MessageWithContents(byte[] contents, Type contentsType, int chatID, int senderID) 
             : base(chatID, senderID)
@@ -65,42 +85,35 @@ namespace Common.Messages
     {
         public string FileName { get; }
 
-        public FileMessage(string fileName, byte[] contents, int chatID, int senderID) 
-            : base(contents, Type.File, chatID, senderID)
-        {
-            FileName = fileName;
-        }
-    }
-
-    [Serializable]
-    public class FileInfoMessage : ChatMessage
-    {
         public string FileID { get; }
 
-        public string FileName { get; }
-
-        public FileInfoMessage(string fileID, string filename, int chatID, int senderID)
-            : base(chatID, senderID)
+        public FileMessage(int chatID, int senderID, byte[] contents, string fileName, string fileID = "") 
+            : base(contents, Type.File, chatID, senderID)
         {
             FileID = fileID;
-            FileName = filename;
+            FileName = fileName;
         }
     }
 
     [Serializable]
     public class ChatCreationMessage : ChatMessage 
     {
+        public bool Created { get; set; } = false;
+        
         public List<int> Members { get; }
+
+        public string ChatName { get; set; }
 
         public (int Count, byte[] PublicKey)[] PublicKeys { get; }
 
         public int HopsNumber { get; set; }
 
-        public ChatCreationMessage(List<int> users, int senderID) : base(chatID: 0, senderID)
+        public ChatCreationMessage(List<int> users, int senderID, string name = "") : base(chatID: 0, senderID)
         {
             Members = users;
             PublicKeys = new (int, byte[])[users.Count];
             Array.Fill(PublicKeys, (0, Array.Empty<byte>()));
+            ChatName = name;
         }
     }
 
@@ -113,11 +126,15 @@ namespace Common.Messages
 
         public string Password { get; }
 
-        public AuthenticationMessage(int senderID, bool signingUp, string login, string password) : base(senderID)
+        public byte[] HistoryKey { get; set; }
+
+        public AuthenticationMessage(int senderID, bool signingUp, string login, string password, byte[] historyKey) 
+            : base(senderID)
         {
             IsSigningUp = signingUp;
             Username = login;
             Password = password;
+            HistoryKey = historyKey;
         }
     }
 
@@ -160,14 +177,27 @@ namespace Common.Messages
     {
         public int UserID { get; }
 
+        public string Username { get; }
+
         public string Name { get; }
 
-        public bool IsOnline { get; } = true;
+        public bool IsOnline { get; set; } = true;
 
-        public UserInfoMessage(int senderID, int userID, string name = "", bool isOnline = true) : base(senderID)
+        public UserInfoMessage(int senderID, int userID, string username = "", string name = "", bool isOnline = true) 
+            : base(senderID)
         {
             UserID = userID;
             Name = name;
+            Username = username;
+            IsOnline = isOnline;
+        }
+
+        public UserInfoMessage(int senderID, string username, int userID = 0, string name = "", bool isOnline = true) 
+            : base(senderID)
+        {
+            UserID = userID;
+            Name = name;
+            Username = username;
             IsOnline = isOnline;
         }
     }

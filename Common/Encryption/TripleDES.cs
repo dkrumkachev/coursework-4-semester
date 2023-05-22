@@ -5,11 +5,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Security;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace Common.Encryption
 {
+    [Serializable]
     public class TripleDES : DES
     {
         private const int KeysNumber = 3;
@@ -18,8 +20,9 @@ namespace Common.Encryption
         private BitsArray keyBits = new();
         private readonly BitsArray[][] subkeys = new BitsArray[KeysNumber][];
         private readonly BitsArray[][] reversedSubkeys = new BitsArray[KeysNumber][];
+        
 
-        public new byte[] Key
+    public new byte[] Key
         {
             get { return key; }
             set
@@ -36,33 +39,47 @@ namespace Common.Encryption
 
         public override byte[] Encrypt(byte[] bytes, bool decrypt = false)
         {
+            TripleDESCng tripleDES = new();
+            tripleDES.Key = key;
+            tripleDES.IV = InitializationVector;
+            if (decrypt)
+            {
+                return tripleDES.DecryptEcb(bytes, System.Security.Cryptography.PaddingMode.PKCS7);
+            }
+            else
+            {
+                return tripleDES.EncryptEcb(bytes, System.Security.Cryptography.PaddingMode.PKCS7);
+            }
+        }
+        public byte[] EncryptSlow(byte[] bytes, bool decrypt = false)
+        {
             List<BitsArray> blocks = SplitIntoBlocks(bytes);
             if (!decrypt)
             {
-                for (int i = 0; i < blocks.Count; i++)
+                Parallel.For(0, blocks.Count, i =>
                 {
                     blocks[i] = CipherBlock(blocks[i], subkeys[0]);
                     blocks[i] = CipherBlock(blocks[i], reversedSubkeys[1]);
                     blocks[i] = CipherBlock(blocks[i], subkeys[2]);
-                }
+                });
             }
             else
             {
-                for (int i = 0; i < blocks.Count; i++)
+                Parallel.For(0, blocks.Count, i =>
                 {
                     blocks[i] = CipherBlock(blocks[i], reversedSubkeys[2]);
                     blocks[i] = CipherBlock(blocks[i], subkeys[1]);
                     blocks[i] = CipherBlock(blocks[i], reversedSubkeys[0]);
-                }
+                });
             }
             return new BitsArray(blocks).ToByteArray();
         }
 
         public override byte[] GenerateKey()
         {
-            Array.Copy(base.GenerateKey(), 0, key, 0, DES.KeySize);
-            Array.Copy(base.GenerateKey(), 0, key, DES.KeySize, DES.KeySize);
-            Array.Copy(base.GenerateKey(), 0, key, 2 * DES.KeySize, DES.KeySize);
+            Array.Copy(base.GenerateKey(), 0, key, 0, DES.KeySize / 8);
+            Array.Copy(base.GenerateKey(), 0, key, DES.KeySize / 8, DES.KeySize / 8);
+            Array.Copy(base.GenerateKey(), 0, key, 2 * DES.KeySize / 8, DES.KeySize / 8);
             keyBits = new BitsArray(key);
             GenerateSubkeysArray(keyBits);
             return key;

@@ -5,6 +5,7 @@ using static System.Reflection.Metadata.BlobBuilder;
 
 namespace Common.Encryption
 {
+    [Serializable]
     public class DES
     {
         public const int BlockSize = 64;
@@ -15,7 +16,12 @@ namespace Common.Encryption
 
         #region Permutation tables and S-boxes
 
-        private readonly int[] InitialPermutation = new int[BlockSize] {
+        protected readonly byte[] InitializationVector = new byte[BlockSize / 8]
+        {
+            241, 25, 90, 34, 119, 203, 79, 15
+        };
+
+        private readonly byte[] InitialPermutation = new byte[BlockSize] {
             57, 49, 41, 33, 25, 17, 9, 1,
             59, 51, 43, 35, 27, 19, 11, 3,
             61, 53, 45, 37, 29, 21, 13, 5,
@@ -26,7 +32,7 @@ namespace Common.Encryption
             62, 54, 46, 38, 30, 22, 14, 6
         };
 
-        private readonly int[] FinalPermutation = new int[BlockSize] {
+        private readonly byte[] FinalPermutation = new byte[BlockSize] {
             39, 7, 47, 15, 55, 23, 63, 31,
             38, 6, 46, 14, 54, 22, 62, 30,
             37, 5, 45, 13, 53, 21, 61, 29,
@@ -37,7 +43,7 @@ namespace Common.Encryption
             32, 0, 40, 8, 48, 16, 56, 24
         };
 
-        private readonly int[] ExpansionPermutation = new int[SubkeySize] {
+        private readonly byte[] ExpansionPermutation = new byte[SubkeySize] {
             31, 0, 1, 2, 3, 4,
             3, 4, 5, 6, 7, 8,
             7, 8, 9, 10, 11, 12,
@@ -48,7 +54,7 @@ namespace Common.Encryption
             27, 28, 29, 30, 31, 0,
         };
 
-        private readonly int[] PermutationBox = new int[BlockSize / 2]
+        private readonly byte[] PermutationBox = new byte[BlockSize / 2]
         {
             15, 6, 19, 20,
             28, 11, 27, 16,
@@ -60,7 +66,7 @@ namespace Common.Encryption
             21, 10, 3, 24,
         };
 
-        private readonly int[] PermutedChoice1 = new int[EffectiveKeySize]
+        private readonly byte[] PermutedChoice1 = new byte[EffectiveKeySize]
         {
             56, 48, 40, 32, 24, 16, 8,
             0, 57, 49, 41, 33, 25, 17,
@@ -72,7 +78,7 @@ namespace Common.Encryption
             20, 12, 4, 27, 19, 11, 3
         };
 
-        private readonly int[] PermutedChoice2 = new int[SubkeySize]
+        private readonly byte[] PermutedChoice2 = new byte[SubkeySize]
         {
             13, 16, 10, 23, 0, 4,
             2, 27, 14, 5, 20, 9,
@@ -159,7 +165,7 @@ namespace Common.Encryption
             }
         }
 
-        protected BitsArray Permutation(BitsArray block, int[] permutationArray)
+        protected BitsArray Permutation(BitsArray block, byte[] permutationArray)
         {
             var permutatedBlock = new BitsArray(permutationArray.Length);
             for (int i = 0; i < permutationArray.Length; i++)
@@ -194,8 +200,8 @@ namespace Common.Encryption
 
         private static bool IsKeyWeakOrSemiweak(byte[] key)
         {
-            ulong half1 = BitConverter.ToUInt64(key.AsSpan()[..(key.Length / 2)]);
-            ulong half2 = BitConverter.ToUInt64(key.AsSpan()[(key.Length / 2)..]);
+            uint half1 = BitConverter.ToUInt32(key[..(key.Length / 2)]);
+            uint half2 = BitConverter.ToUInt32(key[(key.Length / 2)..]);
             return (half1 == 0x01010101u && half2 == 0x01010101u ||
                     half1 == 0xFEFEFEFEu && half2 == 0xFEFEFEFEu ||
                     half1 == 0x1F1F1F1Fu && half2 == 0x0E0E0E0Eu ||

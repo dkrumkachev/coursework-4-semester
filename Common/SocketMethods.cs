@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Sockets;
 using System.Runtime.Serialization.Formatters.Binary;
@@ -29,7 +30,7 @@ namespace Common
             int received = 0;
             while (received < size)
             {
-                byte[] buffer = new byte[Constants.TransferBlockSize];
+                byte[] buffer = new byte[Math.Min(Constants.TransferBlockSize, size)];
                 int bytesRead = socket.Receive(buffer);
                 if (bytesRead == 0)
                 {
@@ -37,12 +38,12 @@ namespace Common
                 }
                 Buffer.BlockCopy(buffer, 0, bytes, received, bytesRead);
                 received += bytesRead;
-            }
+            } 
             if (tripleDES != null)
             {
                 bytes = tripleDES.Encrypt(bytes, decrypt: true);
             }
-            return Deserialize(bytes);
+            return Message.Deserialize(bytes);
         }
 
         public static int ReceiveSize(Socket socket)
@@ -57,37 +58,35 @@ namespace Common
 
         public static void SendMessage(Message message, Socket socket, TripleDES? tripleDES = null)
         {
-            byte[] bytes = Serialize(message);
+            byte[] bytes = Message.Serialize(message);
             if (tripleDES != null)
             {
                 bytes = tripleDES.Encrypt(bytes);
             }
             socket.Send(BitConverter.GetBytes(bytes.Length));
+            var bytesLeftToTransmit = bytes.Length;
             int start = 0;
-            while (start + Constants.TransferBlockSize < bytes.Length)
+            while (bytesLeftToTransmit > 0)
             {
-                socket.Send(bytes[start..(start + Constants.TransferBlockSize)]);
-                start += Constants.TransferBlockSize;
+                var dataToSend = Math.Min(Constants.TransferBlockSize, bytesLeftToTransmit);
+                var sendBuffer = bytes[start..(start + dataToSend)];
+                start += dataToSend;
+                bytesLeftToTransmit -= dataToSend;
+                var offset = 0;
+                while (dataToSend > 0)
+                {
+                    var bytesSent = socket.Send(sendBuffer, offset, dataToSend, SocketFlags.None);
+                    dataToSend -= bytesSent;
+                    offset += bytesSent;
+                }
             }
-            socket.Send(bytes[start..]);
+            /* while (start + Constants.TransferBlockSize < bytes.Length)
+             {
+                 socket.Send(bytes[start..(start + Constants.TransferBlockSize)]);
+                 start += Constants.TransferBlockSize;
+             }
+             socket.Send(bytes[start..]);*/
         }
-
-#pragma warning disable SYSLIB0011
-        private static byte[] Serialize(Message message)
-        {
-            var serializer = new BinaryFormatter();
-            using var stream = new MemoryStream();
-            serializer.Serialize(stream, message);
-            return stream.ToArray();
-        }
-
-        private static Message Deserialize(byte[] bytes)
-        {
-            var serializer = new BinaryFormatter();
-            using var stream = new MemoryStream(bytes);
-            return (Message)serializer.Deserialize(stream);
-        }
-#pragma warning restore SYSLIB0011
 
     }
 }

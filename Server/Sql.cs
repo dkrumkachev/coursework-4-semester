@@ -18,6 +18,7 @@ namespace Server
             public string Username;
             public string Password;
             public string Name;
+            public byte[] HistoryKey;
         }
 
         public static List<UserRecord> GetAllUsers()
@@ -35,7 +36,8 @@ namespace Server
                     ID = reader.GetInt32(0),
                     Username = reader.GetString(1),
                     Password = reader.GetString(2),
-                    Name = reader.GetString(3)
+                    Name = reader.GetString(3),
+                    HistoryKey = (byte[])reader[4],
                 };
                 users.Add(user);
             }
@@ -55,10 +57,11 @@ namespace Server
                     ID = reader.GetInt32(0),
                     Username = reader.GetString(1),
                     Password = reader.GetString(2),
-                    Name = reader.GetString(3)
+                    Name = reader.GetString(3),
+                    HistoryKey = (byte[])reader[4],
                 }; 
             }
-            return new UserRecord() { ID = 0 };
+            return new UserRecord() { ID = 0, Username = "", Password = "", Name = "" };
         }
 
         public static UserRecord GetUserByID(int id)
@@ -135,13 +138,13 @@ namespace Server
             var updateSql = "UPDATE Users SET name = @name WHERE id = @id";
             using var connection = new SqlConnection(SqlConnectionString);
             using var command = new SqlCommand(updateSql, connection);
-            command.Parameters.AddWithValue("@name", id);
+            command.Parameters.AddWithValue("@name", name);
             command.Parameters.AddWithValue("@id", id);
             connection.Open();
             return command.ExecuteNonQuery() != 0;
         }
 
-        public static int AddUser(string username, string password, string name)
+        public static int AddUser(string username, string password, string name, byte[] historyKey)
         {
             using var connection = new SqlConnection(SqlConnectionString);
             connection.Open();
@@ -152,12 +155,14 @@ namespace Server
             {
                 throw new ArgumentException("This username is already taken");
             }
-            var insertSql = "INSERT INTO Users (username, password, name) VALUES (@Username, @Password, @Name); " +
+            var insertSql = "INSERT INTO Users (username, password, name, history_key) VALUES " +
+                            "(@Username, @Password, @Name, @HistoryKey); " +
                             "SELECT SCOPE_IDENTITY();";
             var insertCommand = new SqlCommand(insertSql, connection);
             insertCommand.Parameters.AddWithValue("@Username", username);
             insertCommand.Parameters.AddWithValue("@Password", password);
             insertCommand.Parameters.AddWithValue("@Name", name);
+            insertCommand.Parameters.AddWithValue("@HistoryKey", historyKey);
             object newUserIdObj = insertCommand.ExecuteScalar();
             if (int.TryParse(newUserIdObj.ToString(), out int newUserId))
             {

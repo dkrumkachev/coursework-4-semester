@@ -8,9 +8,12 @@ using Org.BouncyCastle.Math;
 
 namespace Client
 {
+    [Serializable]
     internal class Chat
     {
         public int ID { get; set; }
+
+        public string Name { get; set; } = string.Empty;
 
         public List<int> Members { get; }
 
@@ -20,16 +23,11 @@ namespace Client
 
         public BigInteger PrivateKey { get; set; } = Encryption.GeneratePrivateKey();
 
-        public Chat(int id, List<int> members) 
+        public Chat(int id, List<int> members, string name = "") 
         {
             ID = id;
             Members = members;
-        }
-
-        public void Send(ChatMessage message, Socket server)
-        {
-            message.ChatID = ID;
-            SendMessage(message, server, TripleDES);
+            Name = name;
         }
 
     }

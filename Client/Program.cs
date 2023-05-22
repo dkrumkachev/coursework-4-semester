@@ -8,5 +8,6 @@ namespace Client
             ApplicationConfiguration.Initialize();
             Application.Run(new MainForm());
         }
+
     }
 }

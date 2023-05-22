@@ -40,8 +40,12 @@ namespace Common.Encryption
         public static byte[] MultiplyByPrivateKey(byte[] publicKey, BigInteger privateKey)
         {
             ECPoint publicKeyPoint = curveParams.Curve.DecodePoint(publicKey);
-            byte[] sharedKey = publicKeyPoint.Multiply(privateKey).GetEncoded();
-            return sharedKey[..(TripleDES.KeySize / 8)];
+            return publicKeyPoint.Multiply(privateKey).GetEncoded();
+        }
+
+        public static byte[] CropTheKey(byte[] key)
+        {
+            return key[..(TripleDES.KeySize / 8)];
         }
 
         public static string SHA256Hash(byte[] bytes)

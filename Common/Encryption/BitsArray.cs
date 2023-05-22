@@ -7,10 +7,10 @@ using System.Threading.Tasks;
 
 namespace Common.Encryption
 {
+    [Serializable]
     public class BitsArray
     {
         public bool[] bits;
-
 
         public int Length { get { return bits.Length; } private set { Array.Resize(ref bits, value); } }
 

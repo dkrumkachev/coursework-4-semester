@@ -10,7 +10,7 @@ namespace Common
         public const int SelfChatID = 0;
         public const int ServerID = 0;
 
-        public static int TransferBlockSize { get; } = 1024;
+        public static int TransferBlockSize { get; } = 1048576;
         
         public static int ServerPort { get; } = 4886;
 

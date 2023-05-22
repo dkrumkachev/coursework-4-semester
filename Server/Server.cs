@@ -66,7 +66,9 @@ namespace Server
 
         public void Run()
         {
-            //Sql.DeleteUser("dkrumkachev");
+            Sql.DeleteUser("a");
+
+            //Sql.Execute("ALTER TABLE Users ADD history_key VARBINARY(MAX) NOT NULL");
             try
             {
                 BindSocketToThisMachine(server);
@@ -78,7 +80,9 @@ namespace Server
             List<Sql.UserRecord> users = Sql.GetAllUsers();
             foreach (Sql.UserRecord user in users)
             {
-                clients.TryAdd(user.ID, new Client(user.ID, user.Name));
+                Console.WriteLine(user.ID + " " + user.Name + " " + user.Username);
+                clients.TryAdd(user.ID, new Client(user.ID, user.Name, user.Username));
+                clients[user.ID].IsOnline = false;
             }
             server.Listen(MaxConnectionsQueueSize);
             Console.WriteLine("The server is waiting for connections . . .");
@@ -96,6 +100,7 @@ namespace Server
 
         private void CommunicateWithClient(Socket clientSocket)
         {
+            Client? client = null;
             try
             {
                 if (((ServiceMessage)ReceiveMessage(clientSocket)).MessageType != ServiceMessage.Type.Connecting)
@@ -103,21 +108,28 @@ namespace Server
                     return;
                 }
                 TripleDES tripleDES = KeyExchange(clientSocket);
-                Client client = ClientAuthentication(clientSocket, tripleDES);
-                client.TripleDES = tripleDES;
-                client.IsOnline = true;
+                client = ClientAuthentication(clientSocket, tripleDES);
                 while (IsConnected(clientSocket))
                 {
-                    Message message = ReceiveMessage(clientSocket, client.TripleDES);
+                    Message message = ReceiveMessage(clientSocket, tripleDES);
                     HandleMessage(message);
                 }
+                client.IsOnline = false;
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                Console.WriteLine(e.StackTrace);
+                Console.WriteLine($"client {client?.Username} has disconnected.");
+                Console.WriteLine(ex.StackTrace + ex.Message);
             }
             finally
-            { 
+            {
+                if (client != null)
+                {
+                    lock (client.IsOnlineLock)
+                    {
+                        client.IsOnline = false;
+                    }
+                }
                 clientSocket.Close();
             }
         }
@@ -141,8 +153,11 @@ namespace Server
                 var message = (AuthenticationMessage)ReceiveMessage(clientSocket, tripleDES);
                 try
                 {
-                    return message.IsSigningUp ? SignUp(clientSocket, message, tripleDES) 
+                    Client client = message.IsSigningUp ? SignUp(clientSocket, message, tripleDES) 
                         : SignIn(clientSocket, message, tripleDES);
+                    client.IsOnline = true;
+                    client.TripleDES = tripleDES;
+                    return client;
                 }
                 catch (ArgumentException e)
                 {
@@ -156,12 +171,10 @@ namespace Server
 
         private Client SignUp(Socket clientSocket, AuthenticationMessage message, TripleDES tripleDES)
         {
-            int newUserID = Sql.AddUser(message.Username, message.Password, message.Username);
-            SendMessage(new UserInfoMessage(ServerID, newUserID), clientSocket, tripleDES);
-            var userInfo = (UserInfoMessage)ReceiveMessage(clientSocket, tripleDES);
-            var client = new Client(clientSocket, userInfo.Name, newUserID);
+            int newUserID = Sql.AddUser(message.Username, message.Password, message.Username, message.HistoryKey);
+            SendMessage(new UserInfoMessage(ServerID, newUserID, message.Username), clientSocket, tripleDES);
+            var client = new Client(clientSocket, message.Username, message.Username, newUserID);
             clients.TryAdd(newUserID, client);
-            SendSuccessMessage(clientSocket, tripleDES);
             return client;
         }
         
@@ -177,8 +190,12 @@ namespace Server
                 throw new ArgumentException("Incorrect password");
             }
             Client client = clients[user.ID];
+            client.Socket = clientSocket;
+            Console.WriteLine($"{client.ID} {client.Name} has signed in.");
             var userInfoMessage = new UserInfoMessage(ServerID, user.ID, client.Name, true);
             SendMessage(userInfoMessage, clientSocket, tripleDES);
+            message.HistoryKey = user.HistoryKey;
+            SendMessage(message, clientSocket, tripleDES);
             return client;
         }
 
@@ -197,10 +214,6 @@ namespace Server
                 else if (message is ChatCreationMessage)
                 {
                     HandleChatCreationMessage((ChatCreationMessage)message);
-                }
-                else if (message is FileInfoMessage)
-                {
-                    HandleFileInfoMessage((FileInfoMessage)message);
                 }
                 else if (message is FileMessage)
                 {
@@ -233,6 +246,7 @@ namespace Server
             if (message.ChatID == 0)
             {
                 CreateNewChat(message);
+                message.SenderID = ServerID;
                 message.HopsNumber = 2 * message.Members.Count - 1;
             }
             if (message.HopsNumber > 0)
@@ -244,10 +258,10 @@ namespace Server
             }
             else if (IsKeyExchangeCompleted(message.PublicKeys))
             {
-                var confirmationMessage = new ServiceMessage(ServerID, ServiceMessage.Type.Success);
+                message.Created = true;
                 foreach (int memberID in message.Members)
                 {
-                    Task.Run(() => { clients[memberID].SendIfOnline(confirmationMessage); });
+                    Task.Run(() => { clients[memberID].SendIfOnline(message); });
                 }
             }      
         }
@@ -278,18 +292,19 @@ namespace Server
 
         private void HandleFileMessage(FileMessage message)
         {
-            string fileID = Encryption.SHA256Hash(message.Contents);
-            files.TryAdd(fileID, message.Contents);
-            var fileInfoMessage = new FileInfoMessage(fileID, message.FileName, message.ChatID, message.SenderID);
-            HandleChatMessage(fileInfoMessage);
-        }
-
-        private void HandleFileInfoMessage(FileInfoMessage message)
-        {
-            if (files.TryGetValue(message.FileID, out var fileContents))
+            if (message.FileID == "")
             {
-                var fileMessage = new FileMessage(message.FileName, fileContents, message.ChatID, ServerID);
-                clients[message.SenderID].SendIfOnline(fileMessage);
+                string fileID = Encryption.SHA256Hash(message.Contents);
+                files.TryAdd(fileID, message.Contents);
+                message.Contents = Array.Empty<byte>();
+                HandleChatMessage(message);
+            }
+            else if (files.TryGetValue(message.FileID, out var fileContents))
+            {
+                Client client = clients[message.SenderID];
+                message.Contents = fileContents;
+                message.SenderID = ServerID;
+                client.SendIfOnline(message);
             }
         }
 
@@ -302,6 +317,7 @@ namespace Server
                 {
                     client.IsOnline = false;
                 }
+                client.Socket.Disconnect(false);
             }
         }
 
@@ -309,16 +325,45 @@ namespace Server
         {
             if (message.SenderID == message.UserID)
             {
-                Client client = clients[message.SenderID];
-                if (client.Name != message.Name)
-                {
-                    lock (client.NameLock)
-                    {
-                        client.Name = message.Name;
-                    }
-                    client.SendIfOnline(new ServiceMessage(ServerID, ServiceMessage.Type.Success));
-                }
+                ChangeName(message);
             }
+            else
+            {
+                FindUser(message);
+            }
+        }
+
+        private void ChangeName(UserInfoMessage message)
+        {
+            Client client = clients[message.SenderID];
+            if (client.Name != message.Name)
+            {
+                lock (client.NameLock)
+                {
+                    client.Name = message.Name;
+                }
+                Sql.SetName(client.ID, client.Name);
+            }
+        }
+
+        private void FindUser(UserInfoMessage message)
+        {
+            Client client = clients[message.SenderID];
+            Sql.UserRecord user;
+            if (message.Username != string.Empty)
+            {
+                user = Sql.GetUserByUsername(message.Username);
+            }
+            else
+            {
+                user = Sql.GetUserByID(message.UserID);
+            }
+            var response = new UserInfoMessage(ServerID, user.Username, user.ID, user.Name);
+            if (clients.TryGetValue(user.ID, out var target))
+            {
+                response.IsOnline = target.IsOnline;
+            }
+            client.SendIfOnline(response);
         }
 
         private void SendSuccessMessage(Socket client, TripleDES? tripleDES = null)
