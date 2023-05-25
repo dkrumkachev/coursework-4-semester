@@ -80,12 +80,6 @@ namespace Common
                     offset += bytesSent;
                 }
             }
-            /* while (start + Constants.TransferBlockSize < bytes.Length)
-             {
-                 socket.Send(bytes[start..(start + Constants.TransferBlockSize)]);
-                 start += Constants.TransferBlockSize;
-             }
-             socket.Send(bytes[start..]);*/
         }
 
     }

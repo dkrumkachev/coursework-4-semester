@@ -21,6 +21,34 @@ namespace Server
             public byte[] HistoryKey;
         }
 
+        public static byte[] GetFile(string fileID)
+        {
+            var selectSql = "SELECT contents FROM Files WHERE fileID = @fileID";
+            using var connection = new SqlConnection(SqlConnectionString);
+            using var command = new SqlCommand(selectSql, connection);
+            command.Parameters.AddWithValue("@fileID", fileID);
+            connection.Open();
+            try
+            {
+                return (byte[])command.ExecuteScalar();
+            }
+            catch
+            {
+               return Array.Empty<byte>();
+            }
+        }
+
+        public static void AddFile(string fileID, byte[] contents)
+        {
+            var insertSql = "INSERT INTO Files (fileID, contents) VALUES (@fileID, @contents);";
+            using var connection = new SqlConnection(SqlConnectionString);
+            using var command = new SqlCommand(insertSql, connection);
+            command.Parameters.AddWithValue("@fileID", fileID);
+            command.Parameters.AddWithValue("@contents", contents);
+            connection.Open();
+            command.ExecuteNonQuery();
+        }
+
         public static List<UserRecord> GetAllUsers()
         {
             var users = new List<UserRecord>();
@@ -89,6 +117,7 @@ namespace Server
             connection.Open();
             return command.ExecuteNonQuery() != 0;
         }
+
         public static bool DeleteUser(string username)
         {
             var deleteSql = "DELETE FROM Users WHERE username = @Username";
@@ -168,10 +197,7 @@ namespace Server
             {
                 return newUserId;
             }
-            else
-            {
-                throw new ArgumentException("Error while adding a new user.");
-            }
+            throw new ArgumentException("Error while adding a new user.");
         }
     }
 }

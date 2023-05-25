@@ -11,6 +11,8 @@ namespace Client
     [Serializable]
     internal class Chat
     {
+        public readonly object filesLock = new object();
+
         public int ID { get; set; }
 
         public string Name { get; set; } = string.Empty;
@@ -19,7 +21,7 @@ namespace Client
 
         public TripleDES TripleDES { get; set; } = new();
 
-        public Dictionary<string, string> Files { get; set; } = new();
+        public Dictionary<string, byte[]> Files { get; set; } = new();
 
         public BigInteger PrivateKey { get; set; } = Encryption.GeneratePrivateKey();
 

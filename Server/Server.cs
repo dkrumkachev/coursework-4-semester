@@ -23,7 +23,7 @@ namespace Server
         private const int ServerID = Constants.ServerID;
 
         private readonly ConcurrentDictionary<int, Client> clients = new();
-        private readonly ConcurrentDictionary<int, List<Client>> chats = new();
+        private readonly ConcurrentDictionary<int, List<Client>> chats = new() {};
         private int lastCreatedChat = 0;
         private readonly ConcurrentDictionary<string, byte[]> files = new();
 
@@ -66,9 +66,10 @@ namespace Server
 
         public void Run()
         {
-            Sql.DeleteUser("a");
-
             //Sql.Execute("ALTER TABLE Users ADD history_key VARBINARY(MAX) NOT NULL");
+            //Sql.Execute("CREATE TABLE Files (fileID VARCHAR(64) NOT NULL, contents VARBINARY(MAX) NOT NULL);");
+            Sql.DeleteUser("dmitriy");
+
             try
             {
                 BindSocketToThisMachine(server);
@@ -108,7 +109,7 @@ namespace Server
                     return;
                 }
                 TripleDES tripleDES = KeyExchange(clientSocket);
-                client = ClientAuthentication(clientSocket, tripleDES);
+                client = ClientAuthorization(clientSocket, tripleDES);
                 while (IsConnected(clientSocket))
                 {
                     Message message = ReceiveMessage(clientSocket, tripleDES);
@@ -146,11 +147,11 @@ namespace Server
             return tripleDES;
         }
 
-        private Client ClientAuthentication(Socket clientSocket, TripleDES tripleDES)
+        private Client ClientAuthorization(Socket clientSocket, TripleDES tripleDES)
         {
             while (IsConnected(clientSocket))
             {
-                var message = (AuthenticationMessage)ReceiveMessage(clientSocket, tripleDES);
+                var message = (AuthorizationMessage)ReceiveMessage(clientSocket, tripleDES);
                 try
                 {
                     Client client = message.IsSigningUp ? SignUp(clientSocket, message, tripleDES) 
@@ -169,16 +170,17 @@ namespace Server
             throw new Exception();
         }
 
-        private Client SignUp(Socket clientSocket, AuthenticationMessage message, TripleDES tripleDES)
+        private Client SignUp(Socket clientSocket, AuthorizationMessage message, TripleDES tripleDES)
         {
             int newUserID = Sql.AddUser(message.Username, message.Password, message.Username, message.HistoryKey);
-            SendMessage(new UserInfoMessage(ServerID, newUserID, message.Username), clientSocket, tripleDES);
+            var reply = new UserInfoMessage(ServerID, newUserID, message.Username, message.Username);
+            SendMessage(reply, clientSocket, tripleDES);
             var client = new Client(clientSocket, message.Username, message.Username, newUserID);
             clients.TryAdd(newUserID, client);
             return client;
         }
         
-        private Client SignIn(Socket clientSocket, AuthenticationMessage message, TripleDES tripleDES)
+        private Client SignIn(Socket clientSocket, AuthorizationMessage message, TripleDES tripleDES)
         {
             Sql.UserRecord user = Sql.GetUserByUsername(message.Username);
             if (user.ID == 0)
@@ -190,11 +192,17 @@ namespace Server
                 throw new ArgumentException("Incorrect password");
             }
             Client client = clients[user.ID];
+            if (client.IsOnline)
+            {
+                throw new ArgumentException("You have already signed in");
+            }
             client.Socket = clientSocket;
             Console.WriteLine($"{client.ID} {client.Name} has signed in.");
-            var userInfoMessage = new UserInfoMessage(ServerID, user.ID, client.Name, true);
+            var userInfoMessage = new UserInfoMessage(ServerID, user.ID, client.Username, client.Name, true);
             SendMessage(userInfoMessage, clientSocket, tripleDES);
             message.HistoryKey = user.HistoryKey;
+            message.UnreadMessages = client.UnreadMessages.ToList();
+            client.UnreadMessages.Clear();
             SendMessage(message, clientSocket, tripleDES);
             return client;
         }
@@ -261,6 +269,7 @@ namespace Server
                 message.Created = true;
                 foreach (int memberID in message.Members)
                 {
+                    Client client = clients[memberID];
                     Task.Run(() => { clients[memberID].SendIfOnline(message); });
                 }
             }      
@@ -292,17 +301,16 @@ namespace Server
 
         private void HandleFileMessage(FileMessage message)
         {
-            if (message.FileID == "")
+            if (message.Contents.Length > 0)
             {
-                string fileID = Encryption.SHA256Hash(message.Contents);
-                files.TryAdd(fileID, message.Contents);
+                Sql.AddFile(message.FileID, message.Contents);
                 message.Contents = Array.Empty<byte>();
                 HandleChatMessage(message);
             }
-            else if (files.TryGetValue(message.FileID, out var fileContents))
+            else
             {
                 Client client = clients[message.SenderID];
-                message.Contents = fileContents;
+                message.Contents = Sql.GetFile(message.FileID);
                 message.SenderID = ServerID;
                 client.SendIfOnline(message);
             }

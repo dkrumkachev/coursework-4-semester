@@ -18,7 +18,6 @@ namespace Server
     {
         public readonly object IsOnlineLock = new();
         public readonly object NameLock = new();
-
         private static readonly object sendLock = new();
 
         public bool IsOnline { get; set; } = true;
@@ -35,7 +34,7 @@ namespace Server
 
         public List<int> Chats { get; } = new();
 
-        public ConcurrentDictionary<int, List<byte[]>> History { get; } = new();
+        public ConcurrentBag<ChatMessage> UnreadMessages { get; } = new();
 
         public Client(Socket socket, string name, string username, int id)
         {
@@ -44,7 +43,6 @@ namespace Server
             Username = username;
             ID = id;
             TripleDES = new TripleDES();
-            History.TryAdd(Constants.SelfChatID, new List<byte[]>());
         }
 
         public Client(int id, string name, string username)
@@ -54,7 +52,6 @@ namespace Server
             Username = username;
             ID = id;
             TripleDES = new TripleDES();
-            History.TryAdd(Constants.SelfChatID, new List<byte[]>());
         }
 
         public void SendIfOnline(Message message)
@@ -65,31 +62,29 @@ namespace Server
             {
                 isOnline = IsOnline;
             }
-            if (message.SenderID != ID && isOnline)
+            if (message.SenderID != ID)
             {
-                lock (sendLock)
+                if (isOnline)
                 {
-                    SendMessage(message, Socket, TripleDES);
+                    lock (sendLock)
+                    {
+                        SendMessage(message, Socket, TripleDES);
+                    }
                 }
-            }
-            if (message is ChatMessage userMessage)
-            {
-                SaveToHistory(userMessage);
+                else if (message is ChatMessage chatMessage) 
+                {
+                    SaveMessage(chatMessage);
+                }
             }
         }
 
-        public void SaveToHistory(ChatMessage message)
+        public void SaveMessage(ChatMessage message)
         {
             if (message is FileMessage fileMessage && fileMessage.Contents.Length != 0)
             {
                 return;
             }
-            if (!History.TryGetValue(message.ChatID, out List<byte[]>? chatHistory))
-            {
-                History.TryAdd(message.ChatID, new List<byte[]>());
-            }
-            byte[] serializedMessage = Message.Serialize(message);
-            History[message.ChatID].Add(serializedMessage);
+            UnreadMessages.Add(message);
         }
 
     }

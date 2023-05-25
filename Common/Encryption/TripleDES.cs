@@ -51,6 +51,7 @@ namespace Common.Encryption
                 return tripleDES.EncryptEcb(bytes, System.Security.Cryptography.PaddingMode.PKCS7);
             }
         }
+
         public byte[] EncryptSlow(byte[] bytes, bool decrypt = false)
         {
             List<BitsArray> blocks = SplitIntoBlocks(bytes);

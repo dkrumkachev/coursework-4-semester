@@ -31,15 +31,19 @@
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(MainForm));
             mainPanel = new Panel();
             rightPanel = new Panel();
+            filesPanel = new Panel();
+            label10 = new Label();
+            membersPanel = new Panel();
+            label12 = new Label();
             leftPanel = new Panel();
             newChatButton = new Button();
             centerPanel = new Panel();
-            button2 = new Button();
             messageTextBox = new TextBox();
             fileButton = new Button();
             logoutButton = new Button();
             chatPanel = new Panel();
             initialChatPanelLabel = new Label();
+            chatNameLabel = new Label();
             inputChatNamePanel = new Panel();
             chatNameErrorLabel = new Label();
             label8 = new Label();
@@ -47,7 +51,6 @@
             chatNameTextBox = new TextBox();
             label5 = new Label();
             continueButton = new Button();
-            chatNameLabel = new Label();
             addMembersPanel = new Panel();
             label9 = new Label();
             addedMembersLabel = new Label();
@@ -91,6 +94,9 @@
             saveFileDialog = new SaveFileDialog();
             waitingLabel = new Label();
             mainPanel.SuspendLayout();
+            rightPanel.SuspendLayout();
+            filesPanel.SuspendLayout();
+            membersPanel.SuspendLayout();
             leftPanel.SuspendLayout();
             centerPanel.SuspendLayout();
             chatPanel.SuspendLayout();
@@ -117,10 +123,54 @@
             // 
             rightPanel.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             rightPanel.BackColor = Color.FromArgb(16, 53, 53);
+            rightPanel.Controls.Add(filesPanel);
+            rightPanel.Controls.Add(membersPanel);
             rightPanel.Location = new Point(1314, 6);
             rightPanel.Name = "rightPanel";
             rightPanel.Size = new Size(250, 829);
             rightPanel.TabIndex = 11;
+            // 
+            // filesPanel
+            // 
+            filesPanel.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            filesPanel.BackColor = Color.FromArgb(16, 53, 53);
+            filesPanel.Controls.Add(label10);
+            filesPanel.Location = new Point(0, 416);
+            filesPanel.Name = "filesPanel";
+            filesPanel.Size = new Size(250, 411);
+            filesPanel.TabIndex = 25;
+            // 
+            // label10
+            // 
+            label10.Font = new Font("Segoe UI Semibold", 15F, FontStyle.Bold, GraphicsUnit.Point);
+            label10.ForeColor = Color.White;
+            label10.Location = new Point(0, 0);
+            label10.Name = "label10";
+            label10.Size = new Size(250, 41);
+            label10.TabIndex = 24;
+            label10.Text = "Files:";
+            label10.TextAlign = ContentAlignment.MiddleLeft;
+            // 
+            // membersPanel
+            // 
+            membersPanel.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            membersPanel.BackColor = Color.FromArgb(16, 53, 53);
+            membersPanel.Controls.Add(label12);
+            membersPanel.Location = new Point(0, 0);
+            membersPanel.Name = "membersPanel";
+            membersPanel.Size = new Size(250, 411);
+            membersPanel.TabIndex = 26;
+            // 
+            // label12
+            // 
+            label12.Font = new Font("Segoe UI Semibold", 15F, FontStyle.Bold, GraphicsUnit.Point);
+            label12.ForeColor = Color.White;
+            label12.Location = new Point(0, 0);
+            label12.Name = "label12";
+            label12.Size = new Size(250, 41);
+            label12.TabIndex = 24;
+            label12.Text = "Members:";
+            label12.TextAlign = ContentAlignment.MiddleLeft;
             // 
             // leftPanel
             // 
@@ -151,7 +201,6 @@
             // 
             centerPanel.Anchor = AnchorStyles.Top;
             centerPanel.BackColor = Color.FromArgb(16, 53, 53);
-            centerPanel.Controls.Add(button2);
             centerPanel.Controls.Add(messageTextBox);
             centerPanel.Controls.Add(fileButton);
             centerPanel.Controls.Add(logoutButton);
@@ -161,19 +210,6 @@
             centerPanel.Name = "centerPanel";
             centerPanel.Size = new Size(1046, 829);
             centerPanel.TabIndex = 9;
-            // 
-            // button2
-            // 
-            button2.BackColor = Color.DeepSkyBlue;
-            button2.FlatStyle = FlatStyle.Flat;
-            button2.Font = new Font("Segoe UI", 13.8F, FontStyle.Regular, GraphicsUnit.Point);
-            button2.ForeColor = Color.Black;
-            button2.Location = new Point(818, 0);
-            button2.Name = "button2";
-            button2.Size = new Size(111, 40);
-            button2.TabIndex = 22;
-            button2.Text = "Settings";
-            button2.UseVisualStyleBackColor = false;
             // 
             // messageTextBox
             // 
@@ -229,7 +265,6 @@
             // 
             chatPanel.BackColor = Color.DarkSlateGray;
             chatPanel.Controls.Add(initialChatPanelLabel);
-            chatPanel.Controls.Add(inputChatNamePanel);
             chatPanel.Location = new Point(0, 47);
             chatPanel.Margin = new Padding(10);
             chatPanel.MaximumSize = new Size(1046, 0);
@@ -242,12 +277,23 @@
             initialChatPanelLabel.AutoSize = true;
             initialChatPanelLabel.Font = new Font("Futura Md BT", 19.8000011F, FontStyle.Regular, GraphicsUnit.Point);
             initialChatPanelLabel.ForeColor = Color.Gainsboro;
-            initialChatPanelLabel.Location = new Point(211, 82);
+            initialChatPanelLabel.Location = new Point(279, 338);
             initialChatPanelLabel.Name = "initialChatPanelLabel";
-            initialChatPanelLabel.Size = new Size(601, 41);
+            initialChatPanelLabel.Size = new Size(507, 41);
             initialChatPanelLabel.TabIndex = 16;
-            initialChatPanelLabel.Text = "Your messages will be displayed here";
+            initialChatPanelLabel.Text = "Select a chat to start messaging";
             initialChatPanelLabel.TextAlign = ContentAlignment.MiddleCenter;
+            // 
+            // chatNameLabel
+            // 
+            chatNameLabel.Font = new Font("Segoe UI Semibold", 15F, FontStyle.Bold, GraphicsUnit.Point);
+            chatNameLabel.ForeColor = Color.White;
+            chatNameLabel.Location = new Point(0, 0);
+            chatNameLabel.Name = "chatNameLabel";
+            chatNameLabel.Size = new Size(929, 41);
+            chatNameLabel.TabIndex = 20;
+            chatNameLabel.Text = "Chat";
+            chatNameLabel.TextAlign = ContentAlignment.MiddleLeft;
             // 
             // inputChatNamePanel
             // 
@@ -257,7 +303,7 @@
             inputChatNamePanel.Controls.Add(chatNameTextBox);
             inputChatNamePanel.Controls.Add(label5);
             inputChatNamePanel.Controls.Add(continueButton);
-            inputChatNamePanel.Location = new Point(734, 402);
+            inputChatNamePanel.Location = new Point(1417, 941);
             inputChatNamePanel.Name = "inputChatNamePanel";
             inputChatNamePanel.Size = new Size(250, 294);
             inputChatNamePanel.TabIndex = 20;
@@ -271,7 +317,7 @@
             chatNameErrorLabel.Name = "chatNameErrorLabel";
             chatNameErrorLabel.Size = new Size(250, 69);
             chatNameErrorLabel.TabIndex = 25;
-            chatNameErrorLabel.Text = "You already have a chat with this name";
+            chatNameErrorLabel.Text = "Please specify a chat name.";
             chatNameErrorLabel.TextAlign = ContentAlignment.TopCenter;
             chatNameErrorLabel.Visible = false;
             // 
@@ -311,7 +357,7 @@
             chatNameTextBox.Name = "chatNameTextBox";
             chatNameTextBox.Size = new Size(222, 38);
             chatNameTextBox.TabIndex = 17;
-            chatNameTextBox.TextChanged += chatNameTextBox_TextChanged;
+            chatNameTextBox.TextChanged += ChatNameTextBox_TextChanged;
             // 
             // label5
             // 
@@ -337,17 +383,6 @@
             continueButton.UseVisualStyleBackColor = false;
             continueButton.Click += ContinueButton_Click;
             // 
-            // chatNameLabel
-            // 
-            chatNameLabel.Font = new Font("Segoe UI Semibold", 15F, FontStyle.Bold, GraphicsUnit.Point);
-            chatNameLabel.ForeColor = Color.White;
-            chatNameLabel.Location = new Point(0, 0);
-            chatNameLabel.Name = "chatNameLabel";
-            chatNameLabel.Size = new Size(812, 41);
-            chatNameLabel.TabIndex = 20;
-            chatNameLabel.Text = "Chat";
-            chatNameLabel.TextAlign = ContentAlignment.MiddleLeft;
-            // 
             // addMembersPanel
             // 
             addMembersPanel.Controls.Add(label9);
@@ -358,7 +393,7 @@
             addMembersPanel.Controls.Add(addButton);
             addMembersPanel.Controls.Add(findUserErrorLabel2);
             addMembersPanel.Controls.Add(label6);
-            addMembersPanel.Location = new Point(1131, 897);
+            addMembersPanel.Location = new Point(1147, 899);
             addMembersPanel.Name = "addMembersPanel";
             addMembersPanel.Size = new Size(250, 367);
             addMembersPanel.TabIndex = 20;
@@ -384,7 +419,6 @@
             addedMembersLabel.TabIndex = 23;
             addedMembersLabel.Text = "Added members:";
             addedMembersLabel.TextAlign = ContentAlignment.TopCenter;
-            addedMembersLabel.Visible = false;
             // 
             // createGroupChatButton
             // 
@@ -471,9 +505,9 @@
             createSingleChatPanel.Controls.Add(userInfoTextBox);
             createSingleChatPanel.Controls.Add(label3);
             createSingleChatPanel.Controls.Add(createSingleChatButton);
-            createSingleChatPanel.Location = new Point(858, 888);
+            createSingleChatPanel.Location = new Point(867, 892);
             createSingleChatPanel.Name = "createSingleChatPanel";
-            createSingleChatPanel.Size = new Size(250, 237);
+            createSingleChatPanel.Size = new Size(250, 261);
             createSingleChatPanel.TabIndex = 15;
             createSingleChatPanel.Visible = false;
             // 
@@ -494,7 +528,7 @@
             cancelButton2.FlatStyle = FlatStyle.Flat;
             cancelButton2.Font = new Font("Segoe UI", 13.8F, FontStyle.Regular, GraphicsUnit.Point);
             cancelButton2.ForeColor = Color.Black;
-            cancelButton2.Location = new Point(127, 169);
+            cancelButton2.Location = new Point(126, 142);
             cancelButton2.Name = "cancelButton2";
             cancelButton2.Size = new Size(109, 42);
             cancelButton2.TabIndex = 19;
@@ -506,9 +540,9 @@
             // 
             findUserErrorLabel1.Font = new Font("Futura Bk BT", 13.8F, FontStyle.Regular, GraphicsUnit.Point);
             findUserErrorLabel1.ForeColor = Color.Red;
-            findUserErrorLabel1.Location = new Point(0, 76);
+            findUserErrorLabel1.Location = new Point(0, 187);
             findUserErrorLabel1.Name = "findUserErrorLabel1";
-            findUserErrorLabel1.Size = new Size(250, 36);
+            findUserErrorLabel1.Size = new Size(250, 74);
             findUserErrorLabel1.TabIndex = 18;
             findUserErrorLabel1.Text = "user not found";
             findUserErrorLabel1.TextAlign = ContentAlignment.TopCenter;
@@ -521,7 +555,7 @@
             userInfoTextBox.Cursor = Cursors.IBeam;
             userInfoTextBox.Font = new Font("Segoe UI", 13.8F, FontStyle.Regular, GraphicsUnit.Point);
             userInfoTextBox.ForeColor = Color.White;
-            userInfoTextBox.Location = new Point(14, 115);
+            userInfoTextBox.Location = new Point(13, 88);
             userInfoTextBox.Name = "userInfoTextBox";
             userInfoTextBox.Size = new Size(222, 38);
             userInfoTextBox.TabIndex = 17;
@@ -543,7 +577,7 @@
             createSingleChatButton.FlatStyle = FlatStyle.Flat;
             createSingleChatButton.Font = new Font("Segoe UI", 13.8F, FontStyle.Regular, GraphicsUnit.Point);
             createSingleChatButton.ForeColor = Color.Black;
-            createSingleChatButton.Location = new Point(14, 169);
+            createSingleChatButton.Location = new Point(13, 142);
             createSingleChatButton.Name = "createSingleChatButton";
             createSingleChatButton.Size = new Size(109, 42);
             createSingleChatButton.TabIndex = 15;
@@ -662,7 +696,7 @@
             authenticationPanel.Controls.Add(passwordLabel);
             authenticationPanel.Controls.Add(errorLabel);
             authenticationPanel.Controls.Add(headerLabel);
-            authenticationPanel.Location = new Point(1584, 479);
+            authenticationPanel.Location = new Point(1588, 476);
             authenticationPanel.Name = "authenticationPanel";
             authenticationPanel.Size = new Size(344, 462);
             authenticationPanel.TabIndex = 14;
@@ -897,10 +931,11 @@
             BackColor = Color.FromArgb(16, 53, 53);
             ClientSize = new Size(1920, 1051);
             Controls.Add(waitingLabel);
-            Controls.Add(addMembersPanel);
-            Controls.Add(chooseChatTypePanel);
             Controls.Add(createSingleChatPanel);
+            Controls.Add(addMembersPanel);
+            Controls.Add(inputChatNamePanel);
             Controls.Add(authenticationPanel);
+            Controls.Add(chooseChatTypePanel);
             Controls.Add(nameInputPanel);
             Controls.Add(loadingLabel);
             Controls.Add(mainPanel);
@@ -913,6 +948,9 @@
             FormClosed += MainForm_FormClosed;
             Shown += MainForm_Shown;
             mainPanel.ResumeLayout(false);
+            rightPanel.ResumeLayout(false);
+            filesPanel.ResumeLayout(false);
+            membersPanel.ResumeLayout(false);
             leftPanel.ResumeLayout(false);
             centerPanel.ResumeLayout(false);
             centerPanel.PerformLayout();
@@ -958,7 +996,6 @@
         private Label passwordLabel;
         private Button changeOptionButton;
         private Button confirmButton;
-        private Label anotherOptionLabel;
         private CheckBox rememberMeCheckBox;
         private Panel createSingleChatPanel;
         private Label findUserErrorLabel1;
@@ -971,7 +1008,6 @@
         private Label chatNameLabel;
         private Button fileButton;
         private Panel chatPanel;
-        private Button button2;
         private Label initialChatPanelLabel;
         private Panel chooseChatTypePanel;
         private Button cancelButton1;
@@ -998,5 +1034,10 @@
         private Label label4;
         private Label label8;
         private Label chatNameErrorLabel;
+        private Label anotherOptionLabel;
+        private Panel filesPanel;
+        private Label label10;
+        private Panel membersPanel;
+        private Label label12;
     }
 }

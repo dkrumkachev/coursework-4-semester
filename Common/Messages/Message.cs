@@ -85,10 +85,17 @@ namespace Common.Messages
     {
         public string FileName { get; }
 
-        public string FileID { get; }
+        public string FileID { get; set; }
 
-        public FileMessage(int chatID, int senderID, byte[] contents, string fileName, string fileID = "") 
+        public FileMessage(int chatID, int senderID, byte[] contents, string fileName, string fileID) 
             : base(contents, Type.File, chatID, senderID)
+        {
+            FileID = fileID;
+            FileName = fileName;
+        }
+
+        public FileMessage(int chatID, int senderID, string fileName, string fileID)
+            : base(Array.Empty<byte>(), Type.File, chatID, senderID)
         {
             FileID = fileID;
             FileName = fileName;
@@ -118,7 +125,7 @@ namespace Common.Messages
     }
 
     [Serializable]
-    public class AuthenticationMessage : Message
+    public class AuthorizationMessage : Message
     {
         public bool IsSigningUp { get; }
 
@@ -128,7 +135,9 @@ namespace Common.Messages
 
         public byte[] HistoryKey { get; set; }
 
-        public AuthenticationMessage(int senderID, bool signingUp, string login, string password, byte[] historyKey) 
+        public List<ChatMessage> UnreadMessages { get; set; } = new();
+
+        public AuthorizationMessage(int senderID, bool signingUp, string login, string password, byte[] historyKey) 
             : base(senderID)
         {
             IsSigningUp = signingUp;

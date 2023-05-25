@@ -4,6 +4,7 @@ using System.Data;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Windows.Forms;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.StartPanel;
 
 namespace Client
@@ -16,8 +17,8 @@ namespace Client
         private readonly Font font = new("Segoe UI", (float)13.8);
         private readonly Color buttonColor = Color.DarkCyan;
 
-        private readonly Dictionary<string, int> chatIDs = new() { { SelfChatName, 0 } };
-        private readonly List<string> newChatUsers = new List<string>();
+        private readonly Dictionary<Button, int> chats = new();
+        private readonly List<string> newChatUsers = new();
 
         private void NewChatButton_Click(object sender, EventArgs e)
         {
@@ -45,7 +46,6 @@ namespace Client
             chatNameTextBox.Text = string.Empty;
             memberNameTextBox.Text = string.Empty;
             chatNameErrorLabel.Visible = false;
-            addedMembersLabel.Visible = false;
             addedMembersLabel.Text = "Added members:";
             newChatUsers.Clear();
         }
@@ -58,30 +58,30 @@ namespace Client
 
         private void CreateSingleChatButton_Click(object sender, EventArgs e)
         {
+
             string username = userInfoTextBox.Text;
             string? displayName = client.FindUser(username);
-            if (displayName == null) 
+            if (username == client.SelfUsername)
             {
+                findUserErrorLabel1.Text = "you cannot create a chat with yourself";
                 findUserErrorLabel1.Visible = true;
             }
-            else if (displayName == client.SelfName || chatIDs.ContainsKey(displayName))
+            else if (displayName == null) 
             {
-                createSingleChatPanel.Visible = false;
-                leftPanel.Visible = true;
-                userInfoTextBox.Text = string.Empty;
+                findUserErrorLabel1.Text = "user not found";
+                findUserErrorLabel1.Visible = true;
             }
             else
             {
-                client.CreateSingleChat(username);
-                AddButtonForChat(displayName);
                 createSingleChatPanel.Visible = false;
                 leftPanel.Visible = true;
                 userInfoTextBox.Text = string.Empty;
+                client.CreateSingleChat(username);
+                AddButtonForChat(displayName);
             }
-            
         }
 
-        private void AddButtonForChat(string name)
+        private Button AddButtonForChat(string name)
         {
             var button = new Button
             {
@@ -97,53 +97,65 @@ namespace Client
             };
             button.FlatAppearance.BorderSize = 0;
             button.Click += SelectChatButton_Click;
-            Invoke(() => leftPanel.Controls.Add(button) );
-            chatButtonLocation.Y += buttonSize.Height + buttonsGap;
+            Invoke(() =>
+            {
+                leftPanel.Controls.Add(button);
+                chatButtonLocation.Y += buttonSize.Height + buttonsGap;
+            });
+            return button;
         }
 
 
         private void SelectChatButton_Click(object? sender, EventArgs e)
         {
-            if (sender is Button button && button.Text != selectedChat)
+            if (sender is Button button)
             {
-                selectedChat = button.Text;
-                initialChatPanelLabel.Visible = false;
-                chatPanel.AutoScrollPosition = new Point(0, 0);
-                chatPanel.Controls.Clear();
-                messageTextBox.Visible = true;
-                fileButton.Visible = true;
-                messageTextBox.Focus();
-                if (chatIDs.ContainsKey(button.Text))
+                if (chats.TryGetValue(button, out int id) && id != selectedChat)
                 {
-                    DisplayChat(button.Text);
+                    chatNameLabel.Text = "    " + button.Text;
+                    initialChatPanelLabel.Visible = false;
+                    chatPanel.AutoScrollPosition = new Point(0, 0);
+                    chatPanel.Controls.Clear();
+                    messageTextBox.Visible = true;
+                    fileButton.Visible = true;
+                    messageTextBox.Focus();
+                    selectedChat = id;
+                    DisplayChat(id);
                 }
                 else
                 {
-                    DisplayChatWaitingForUsers(button.Text);
+                    chatNameLabel.Text = "    " + button.Text;
+                    initialChatPanelLabel.Visible = false;
+                    chatPanel.AutoScrollPosition = new Point(0, 0);
+                    chatPanel.Controls.Clear();
+                    messageTextBox.Visible = true;
+                    fileButton.Visible = true;
+                    messageTextBox.Focus();
+                    DisplayChatWaitingForUsers();
                 }
             }
         }
 
         public void ChatCreated(string name, int id)
         {
-            bool isButtonFound = false;
+            Button? button = null;
             foreach (Control control in leftPanel.Controls)
             {
                 if (control.Text == name)
                 {
-                    isButtonFound = true;
+                    button = (Button)control;
                     break;
                 }
             }
-            if (!isButtonFound)
+            if (button == null)
             {
-                AddButtonForChat(name);
+                button = AddButtonForChat(name);
             }
-            chatIDs.Add(name, id);
-            chatMessages.Add(name, new List<Panel>());
-            history.Add(name, (id, new List<object>()));
-            nextMessageY.Add(name, space * 2);
-            lastMessageDate.Add(name, (0, 0));
+            chats.Add(button, id);
+            chatMessages.Add(id, new List<Panel>());
+            history.Add(id, new List<DisplayedMessage>());
+            nextMessageY.Add(id, space * 2);
+            lastMessageDate.Add(id, (0, 0));
         }
 
         private void GroupChatButton_Click(object sender, EventArgs e)
@@ -154,10 +166,9 @@ namespace Client
 
         private void ContinueButton_Click(object sender, EventArgs e)
         {
-            if (chatIDs.ContainsKey(chatNameLabel.Text))
+            if (chatNameTextBox.Text == string.Empty)
             {
                 chatNameErrorLabel.Visible = true;
-                chatNameTextBox.Text = string.Empty;
             }
             else
             {
@@ -185,17 +196,7 @@ namespace Client
 
         private void CreateGroupChatButton_Click(object sender, EventArgs e)
         {
-            if (newChatUsers.Count == 1)
-            {
-                string username = newChatUsers[0];
-                string? displayName = client.FindUser(username);
-                if (displayName != null && displayName != client.SelfName) 
-                {
-                    client.CreateSingleChat(username);
-                    AddButtonForChat(displayName);
-                }
-            }
-            else if (newChatUsers.Count > 1)
+            if (newChatUsers.Count != 0)
             {
                 client.CreateGroupChat(chatNameTextBox.Text, newChatUsers);
                 AddButtonForChat(chatNameTextBox.Text);
@@ -204,12 +205,12 @@ namespace Client
             chatNameTextBox.Text = string.Empty;
             findUserErrorLabel2.Visible = false;
             addMembersPanel.Visible = false;
-            addedMembersLabel.Visible = false;
+            chatNameErrorLabel.Visible = false;
             addedMembersLabel.Text = "Added members:";
             leftPanel.Visible = true;
         }
 
-        private void chatNameTextBox_TextChanged(object sender, EventArgs e)
+        private void ChatNameTextBox_TextChanged(object sender, EventArgs e)
         {
             chatNameErrorLabel.Visible = false;
         }

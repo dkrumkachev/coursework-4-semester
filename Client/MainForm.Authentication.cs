@@ -14,16 +14,27 @@ namespace Client
     {
         private bool signingUp = false;
 
-        private bool Authenticate()
+        private bool Authorization()
         {
             if (File.Exists(signInFilePath))
             {
                 string[] lines = File.ReadAllLines(signInFilePath);
-                if (lines.Length == 2 && client.Authentication(lines[0], lines[1], out _, out messageHistoryKey))
+                if (lines.Length != 2)
                 {
-                    historyPath = Encryption.SHA256Hash(Encoding.Default.GetBytes(lines[0]));
-                    AuthenticationComplete();
+                    File.Delete(signInFilePath);
+                    return false;
+                }
+                string username = lines[0];
+                string passwordHash = lines[1];
+                if (client.Authorization(username, passwordHash, out string error, out messageHistoryKey))
+                {
+                    historyPath = $"history\\{Encryption.SHA256Hash(Encoding.Default.GetBytes(username))}";
+                    AuthorizationComplete();
                     return true;
+                }
+                else if (error == "You have already signed in")
+                {
+                    return false;
                 }
                 else
                 {
@@ -37,7 +48,7 @@ namespace Client
         {
             string username = usernameTextBox.Text;
             string password = passwordTextBox.Text;
-            if (!client.Authentication(username, ref password, out string error, out messageHistoryKey, signingUp))
+            if (!client.Authorization(username, ref password, out string error, out messageHistoryKey, signingUp))
             {
                 errorLabel.Text = error;
                 errorLabel.Visible = true;
@@ -51,7 +62,7 @@ namespace Client
                 }
                 else
                 {
-                    AuthenticationComplete();
+                    AuthorizationComplete();
                 }
             }
         }
@@ -80,7 +91,6 @@ namespace Client
                 confirmButton.Text = "Continue";
                 anotherOptionLabel.Text = "Already have an account?";
                 changeOptionButton.Text = "Sign in";
-
             }
             else
             {
@@ -102,18 +112,19 @@ namespace Client
             nameInputPanel.Visible = true;
         }
 
-        private void AuthenticationComplete()
+        private void AuthorizationComplete()
         {
+            if (historyPath == string.Empty)
+            {
+                byte[] username = Encoding.Default.GetBytes(usernameTextBox.Text);
+                historyPath = $"history\\{Encryption.SHA256Hash(username)}";
+            }
+            ReadHistoryFromFile();
             if (signingUp)
             {
                 signingUp = false;
                 ChangeContolsText();
             }
-            if (historyPath == string.Empty)
-            {
-                historyPath = Encryption.SHA256Hash(Encoding.Default.GetBytes(usernameTextBox.Text));
-            }
-            ReadHistoryFromFile();
             usernameTextBox.Text = string.Empty;
             passwordTextBox.Text = string.Empty;
             nameTextBox.Text = string.Empty;
@@ -123,24 +134,22 @@ namespace Client
             mainPanel.Visible = true;
             chatNameLabel.Text = "    " + client.SelfName;
             Text = client.SelfName;
+            messageTextBox.Visible = false;
+            fileButton.Visible = false;
             client.ReceiveMessages();
         }
 
         private void SignUpButton_Click(object sender, EventArgs e)
         {
-            if (!client.SetName(nameTextBox.Text))
+            if (nameTextBox.Text == string.Empty || client.SetName(nameTextBox.Text))
             {
-                MessageBox.Show("Something went wrong. Try again.");
-            }
-            else
-            {
-                AuthenticationComplete();
+                AuthorizationComplete();
             }
         }
 
         private void SkipButton_Click(object sender, EventArgs e)
         {
-            AuthenticationComplete();
+            AuthorizationComplete();
         }
 
         private void LogoutButton_Click(object sender, EventArgs e)
@@ -148,21 +157,25 @@ namespace Client
             client.Logout();
             SaveHistory();
             historyPath = string.Empty;
+            leftPanel.Controls.Clear();
+            leftPanel.Controls.Add(newChatButton);
             chatPanel.Controls.Clear();
             chatMessages.Clear();
-            chatMessages.Add(SelfChatName, new List<Panel>());
+            chatMessages.Add(0, new List<Panel>());
             history.Clear();
-            history.Add(SelfChatName, (0, new List<object>()));
+            history.Add(0, new List<DisplayedMessage>());
             nextMessageY.Clear();
-            nextMessageY.Add(SelfChatName, space * 2);
+            nextMessageY.Add(0, space * 2);
             lastMessageDate.Clear();
-            lastMessageDate.Add(SelfChatName, (0, 0));
+            lastMessageDate.Add(0, (0, 0));
+            chatButtonLocation = chatPanel.Location;
             File.Delete(signInFilePath);
             mainPanel.Visible = false;
             loadingLabel.Visible = true;
+            waitingLabel.Visible = false;
             initialChatPanelLabel.Text = "Your messages will be displayed here";
             initialChatPanelLabel.Visible = true;
-            selectedChat = string.Empty;
+            selectedChat = -1;
             ConnectToServer();
         }
     }

@@ -22,6 +22,7 @@ using System.Collections.Concurrent;
 using System.Windows.Forms.Design;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.StartPanel;
 using System.Drawing;
+using System.Diagnostics.Eventing.Reader;
 
 namespace Client
 {
@@ -32,19 +33,22 @@ namespace Client
         private Socket server = new(Constants.AddressFamily, Constants.SocketType, Constants.ProtocolType);
         private readonly TripleDES server3DES = new();
         private ConcurrentDictionary<int, Chat> chats = new();
-        private readonly ConcurrentDictionary<string, (int ID, string Name)> users = new();
-        private readonly ConcurrentDictionary<int, string> usersNames = new();
+        private ConcurrentDictionary<string, (int ID, string Name)> users = new();
+        private ConcurrentDictionary<int, string> usersNames = new();
+        private List<ChatMessage> unreadMessages = new();
         private int selfID;
-        private string selfUsername = string.Empty;
+
+        public string SelfUsername { get; private set; } = string.Empty;
+
         public string SelfName { get; private set; } = string.Empty;
 
         private readonly Action<string, int> chatCreated;
-        private readonly Action<string, string, string> incomingText;
-        private readonly Action<string, string, Image> incomingImage;
-        private readonly Action<string, string, string, string> incomingFile;
+        private readonly Action<int, string, string> incomingText;
+        private readonly Action<int, string, Image> incomingImage;
+        private readonly Action<int, string, string, string> incomingFile;
 
-        public Client(Action<string, int> chatCreated, Action<string, string, string> incomingText, 
-            Action<string, string, Image> incomingImage, Action<string, string, string, string> incomingFile) 
+        public Client(Action<string, int> chatCreated, Action<int, string, string> incomingText, 
+            Action<int, string, Image> incomingImage, Action<int, string, string, string> incomingFile) 
         {
             this.chatCreated = chatCreated;
             this.incomingText = incomingText;
@@ -55,40 +59,48 @@ namespace Client
 #pragma warning disable SYSLIB0011
 
         [Serializable]
-        public struct SerializedFields
+        public struct SavedInfo
         {
             public List<KeyValuePair<int, Chat>> Chats;
             public List<KeyValuePair<string, (int, string)>> Users;
             public List<KeyValuePair<int, string>> UsersNames;
-            public int SelfID;
-            public string SelfUsername;
-            public string SelfName;
         }
 
         public void Save(string filename)
         {
+            var savedInfo = new SavedInfo()
+            {
+                Chats = chats.ToList(),
+                Users = users.ToList(),
+                UsersNames = usersNames.ToList(),
+            };
             var serializer = new BinaryFormatter();
             using var stream = new MemoryStream();
-            serializer.Serialize(stream, chats.ToList());
+            serializer.Serialize(stream, savedInfo);
             File.WriteAllBytes(filename, stream.ToArray());
         }
 
         public void Restore(string filename)
         {
-            byte[] bytes = File.ReadAllBytes(filename);
-            var serializer = new BinaryFormatter();
-            using var stream = new MemoryStream(bytes);
-            var chatList = (List<KeyValuePair<int, Chat>>)serializer.Deserialize(stream);
-            chats = new ConcurrentDictionary<int, Chat>(chatList);
+            if (File.Exists(filename))
+            {
+                byte[] bytes = File.ReadAllBytes(filename);
+                var serializer = new BinaryFormatter();
+                using var stream = new MemoryStream(bytes);
+                var savedInfo = (SavedInfo)serializer.Deserialize(stream);
+                chats = new ConcurrentDictionary<int, Chat>(savedInfo.Chats);
+                users = new ConcurrentDictionary<string, (int ID, string Name)>(savedInfo.Users);
+                usersNames = new ConcurrentDictionary<int, string>(savedInfo.UsersNames);
+            }
         }
 
 #pragma warning restore SYSLIB0011
 
-        private void SendWithLock(Message message, Socket server, TripleDES tripleDES)
+        private void SendToServer(Message message)
         {
             lock (sendLock)
             {
-                SendMessage(message, server, tripleDES);
+                SendMessage(message, server, server3DES);
             }
         }
 
@@ -122,20 +134,26 @@ namespace Client
             return (successMessage.MessageType == ServiceMessage.Type.Success);
         }
 
-        public bool Authentication(string username, ref string password, out string error, 
+        public bool Authorization(string username, ref string password, out string error, 
             out byte[] messageHistoryKey, bool registration = false)
         {
-            password = Encryption.SHA256Hash(Encoding.Default.GetBytes(password));
-            return Authentication(username, password, out error, out messageHistoryKey, registration);
+            if (username != string.Empty && password != string.Empty)
+            {
+                password = Encryption.SHA256Hash(Encoding.Default.GetBytes(password));
+                return Authorization(username, password, out error, out messageHistoryKey, registration);
+            }
+            error = "Please enter your " + (username == string.Empty ? "username." : "password.");
+            messageHistoryKey = Array.Empty<byte>();
+            return false;
         }
 
-        public bool Authentication(string username, string passwordHash, out string error, 
+        public bool Authorization(string username, string passwordHash, out string error, 
             out byte[] messageHistoryKey, bool registration = false)
         {
             error = "";
             messageHistoryKey = new TripleDES().GenerateKey();
-            Message message = new AuthenticationMessage(0, registration, username, passwordHash, messageHistoryKey);
-            SendMessage(message, server, server3DES);
+            Message message = new AuthorizationMessage(0, registration, username, passwordHash, messageHistoryKey);
+            SendToServer(message);
             message = ReceiveMessage(server, server3DES);
             if (message is ServiceMessage serviceMessage &&
                 serviceMessage.MessageType == ServiceMessage.Type.Error &&
@@ -147,34 +165,29 @@ namespace Client
             var userInfoMessage = (UserInfoMessage)message;
             selfID = userInfoMessage.UserID;
             SelfName = userInfoMessage.Name;
-            selfUsername = username;
+            SelfUsername = username;
             users.TryAdd(username, (selfID, SelfName));
             usersNames.TryAdd(selfID, SelfName);
             var selfChat = new Chat(0, new List<int> { selfID }, SelfChatName);
             selfChat.TripleDES.GenerateKey();
             chats.TryAdd(0, selfChat);
-            if (!registration && ReceiveMessage(server, server3DES) is AuthenticationMessage authenticationMessage)
+            if (!registration && ReceiveMessage(server, server3DES) is AuthorizationMessage authenticationMessage)
             {
                 messageHistoryKey = authenticationMessage.HistoryKey;
+                unreadMessages = authenticationMessage.UnreadMessages;
             }
             return true;
         }
 
         public bool SetName(string name)
         {
-            SendWithLock(new UserInfoMessage(selfID, selfID, name), server, server3DES);
-            var successMessage = (ServiceMessage)ReceiveMessage(server, server3DES);
-            if (successMessage.MessageType == ServiceMessage.Type.Success)
-            {
-                SelfName = name;
-                return true;
-            }
-            return false;
+            SendToServer(new UserInfoMessage(selfID, selfID, SelfUsername, name));
+            SelfName = name;
+            return true;
         }
 
         public void Logout()
         {
-            //SendWithLock(new ServiceMessage(selfID, ServiceMessage.Type.Disconnecting), server, server3DES);
             server.Shutdown(SocketShutdown.Both);
             server.Close();
         }
@@ -185,7 +198,7 @@ namespace Client
             {
                 return user.Name;
             }
-            SendWithLock(new UserInfoMessage(selfID, username), server, server3DES);
+            SendToServer(new UserInfoMessage(selfID, username));
             for (var i = 0; i < 5; i++)
             {
                 if (users.TryGetValue(username, out var value))
@@ -203,7 +216,7 @@ namespace Client
             {
                 return name;
             }
-            SendWithLock(new UserInfoMessage(selfID, id), server, server3DES);
+            SendToServer(new UserInfoMessage(selfID, id));
             for (var i = 0; i < 4; i++)
             {
                 if (usersNames.TryGetValue(id, out name))
@@ -211,6 +224,15 @@ namespace Client
                     return name;
                 }
                 Thread.Sleep(50);
+            }
+            return null;
+        }
+
+        public string? GetChatName(int id)
+        {
+            if (chats.TryGetValue(id, out Chat? chat))
+            {
+                return chat.Name;
             }
             return null;
         }
@@ -224,7 +246,7 @@ namespace Client
                     return true;
                 }
                 List<int> chatMembers = new() { users[username].ID, selfID };
-                SendWithLock(new ChatCreationMessage(chatMembers, selfID, SelfName), server, server3DES);
+                SendToServer(new ChatCreationMessage(chatMembers, selfID, SelfName));
             }
             catch (KeyNotFoundException)
             {
@@ -235,11 +257,11 @@ namespace Client
 
         public bool CreateGroupChat(string chatName, List<string> members)
         {
-            members.Add(selfUsername);
+            members.Add(SelfUsername);
             try
             {
                 List<int> memberIDs = members.Select(i => users[i].ID).ToList();
-                SendWithLock(new ChatCreationMessage(memberIDs, selfID, chatName), server, server3DES);
+                SendToServer(new ChatCreationMessage(memberIDs, selfID, chatName));
             }
             catch (KeyNotFoundException)
             { 
@@ -264,7 +286,7 @@ namespace Client
                 byte[] contents = Encoding.Default.GetBytes(text);
                 contents = chat.TripleDES.Encrypt(contents);
                 var message = new MessageWithContents(contents, MessageWithContents.Type.Text, chatID, selfID);
-                SendWithLock(message, server, server3DES);
+                SendToServer(message);
             }
         }
 
@@ -274,22 +296,43 @@ namespace Client
             {
                 image = chat.TripleDES.Encrypt(image);
                 var message = new MessageWithContents(image, MessageWithContents.Type.Image, chatID, selfID);
-                SendWithLock(message, server, server3DES);
+                SendToServer(message);
             }
         }
 
-        public void SendFile(int chatID, byte[] fileContents, string filename)
+        public string SendFile(int chatID, byte[] fileContents, string filename)
         {
             if (chats.TryGetValue(chatID, out var chat))
             {
-                fileContents = chat.TripleDES.Encrypt(fileContents);
-                var message = new FileMessage(chatID, selfID, fileContents, filename);
-                SendWithLock(message, server, server3DES);
+                byte[] encrypted = chat.TripleDES.Encrypt(fileContents);
+                string fileID = Encryption.SHA256Hash(encrypted);
+                chat.Files.TryAdd(fileID, fileContents);
+                SendToServer(new FileMessage(chatID, selfID, encrypted, filename, fileID));
+                return fileID;
             }
+            return string.Empty;
+        }
+
+        public byte[] GetFile(int chatID, string filename, string fileID)
+        {
+            var message = new FileMessage(chatID, selfID, filename, fileID);
+            SendToServer(message);
+            Chat chat = chats[chatID];
+            byte[]? file;
+            while (!chat.Files.TryGetValue(fileID, out file))
+            {
+                Thread.Sleep(150);
+            }
+            chat.Files.Remove(fileID);
+            return file;
         }
 
         public void ReceiveMessages()
         {
+            foreach (ChatMessage chatMessage in unreadMessages)
+            {
+                HandleMessage(chatMessage);
+            }
             Task.Run(() =>
             {
                 while (true)
@@ -326,28 +369,32 @@ namespace Client
 
         private void HandleMessageWithContents(MessageWithContents msg)
         {
-            Chat chat = chats[msg.ChatID];
-            byte[] contents = chat.TripleDES.Encrypt(msg.Contents, true);
             if (!usersNames.TryGetValue(msg.SenderID, out _))
             {
                 FindUser(msg.SenderID);
             }
-            if (msg.ContentsType == MessageWithContents.Type.Image)
+            if (msg.Contents.Length == 0 && msg is FileMessage fileMsg)
             {
-                Image image = Image.FromStream(new MemoryStream(contents));
-                incomingImage(chat.Name, usersNames[msg.SenderID],  image);
+                incomingFile(msg.ChatID, usersNames[msg.SenderID], fileMsg.FileName, fileMsg.FileID);
             }
-            else if (msg.ContentsType == MessageWithContents.Type.Text)
+            else
             {
-                string text = Encoding.Default.GetString(contents);
-                incomingText(chat.Name, usersNames[msg.SenderID], text);
-            }
-            else if (msg.ContentsType == MessageWithContents.Type.File)
-            {
-                string filename = ((FileMessage)msg).FileName;
-                string fileID = ((FileMessage)msg).FileID;
-                incomingFile(chat.Name, usersNames[msg.SenderID], filename, fileID);
-
+                byte[] contents = chats[msg.ChatID].TripleDES.Encrypt(msg.Contents, true);
+                if (msg.ContentsType == MessageWithContents.Type.Image)
+                {
+                    Image image = Image.FromStream(new MemoryStream(contents));
+                    incomingImage(msg.ChatID, usersNames[msg.SenderID], image);
+                }
+                else if (msg.ContentsType == MessageWithContents.Type.Text)
+                {
+                    string text = Encoding.Default.GetString(contents);
+                    incomingText(msg.ChatID, usersNames[msg.SenderID], text);
+                }
+                else if (msg.ContentsType == MessageWithContents.Type.File)
+                {
+                    string fileID = ((FileMessage)msg).FileID;
+                    chats[msg.ChatID].Files.TryAdd(fileID, contents);
+                }
             }
         }
 
@@ -374,7 +421,7 @@ namespace Client
                 }
             }
             ChatKeyExchange(message);
-            SendWithLock(message, server, server3DES);
+            SendToServer(message);
         }
 
         private void ChatKeyExchange(ChatCreationMessage message)
