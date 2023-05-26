@@ -176,6 +176,11 @@ namespace Client
             initialChatPanelLabel.Text = "Your messages will be displayed here";
             initialChatPanelLabel.Visible = true;
             selectedChat = -1;
+            usersComboBox.Items.Clear();
+            usernameComboBox.Items.Clear();
+            addedMembersLabel.Text = "Added members:";
+            newChatUsers.Clear();
+            chatInfoLabel.Visible = false;
             ConnectToServer();
         }
     }

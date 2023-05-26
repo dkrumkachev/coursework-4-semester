@@ -28,6 +28,11 @@ namespace Client
 
         private void PrivateChatButton_Click(object sender, EventArgs e)
         {
+            List<(string Username, string Name)> users = client.GetAllKnownUsers();
+            foreach (var user in users)
+            {
+                usernameComboBox.Items.Add(user.Username);
+            }
             leftPanel.Visible = false;
             chooseChatTypePanel.Visible = false;
             createSingleChatPanel.Visible = true;
@@ -42,42 +47,50 @@ namespace Client
             inputChatNamePanel.Visible = false;
             addMembersPanel.Visible = false;
             leftPanel.Visible = true;
-            userInfoTextBox.Text = string.Empty;
             chatNameTextBox.Text = string.Empty;
-            memberNameTextBox.Text = string.Empty;
             chatNameErrorLabel.Visible = false;
             addedMembersLabel.Text = "Added members:";
             newChatUsers.Clear();
+            usersComboBox.Items.Clear();
+            usernameComboBox.Items.Clear();
         }
 
-        private void UserInfoTextBox_TextChanged(object sender, EventArgs e)
+        private void UsernameComboBox_TextChanged(object sender, EventArgs e)
         {
             findUserErrorLabel1.Visible = false;
             findUserErrorLabel2.Visible = false;
         }
 
+
         private void CreateSingleChatButton_Click(object sender, EventArgs e)
         {
-
-            string username = userInfoTextBox.Text;
-            string? displayName = client.FindUser(username);
-            if (username == client.SelfUsername)
+            string username = usernameComboBox.Text;
+            if (username != string.Empty)
             {
-                findUserErrorLabel1.Text = "you cannot create a chat with yourself";
-                findUserErrorLabel1.Visible = true;
-            }
-            else if (displayName == null) 
-            {
-                findUserErrorLabel1.Text = "user not found";
-                findUserErrorLabel1.Visible = true;
-            }
-            else
-            {
-                createSingleChatPanel.Visible = false;
-                leftPanel.Visible = true;
-                userInfoTextBox.Text = string.Empty;
-                client.CreateSingleChat(username);
-                AddButtonForChat(displayName);
+                string? displayName = client.FindUser(username);
+                if (username == client.SelfUsername)
+                {
+                    findUserErrorLabel1.Text = "you cannot create a chat with yourself";
+                    findUserErrorLabel1.Visible = true;
+                }
+                else if (displayName == null)
+                {
+                    findUserErrorLabel1.Text = "user not found";
+                    findUserErrorLabel1.Visible = true;
+                }
+                else if (client.ChatNameExists(username))
+                {
+                    findUserErrorLabel1.Text = "you already have a chat with this user";
+                    findUserErrorLabel1.Visible = true;
+                }
+                else
+                {
+                    createSingleChatPanel.Visible = false;
+                    leftPanel.Visible = true;
+                    usernameComboBox.Items.Clear();
+                    client.CreateSingleChat(username);
+                    AddButtonForChat(displayName);
+                } 
             }
         }
 
@@ -122,7 +135,7 @@ namespace Client
                     selectedChat = id;
                     DisplayChat(id);
                 }
-                else
+                else if (id != selectedChat)
                 {
                     chatNameLabel.Text = "    " + button.Text;
                     initialChatPanelLabel.Visible = false;
@@ -141,9 +154,9 @@ namespace Client
             Button? button = null;
             foreach (Control control in leftPanel.Controls)
             {
-                if (control.Text == name)
+                if (control is Button btn && btn.Text == name && !chats.ContainsKey(btn))
                 {
-                    button = (Button)control;
+                    button = btn;
                     break;
                 }
             }
@@ -168,29 +181,37 @@ namespace Client
         {
             if (chatNameTextBox.Text == string.Empty)
             {
+                chatNameErrorLabel.Text = "Please specify a chat name";
                 chatNameErrorLabel.Visible = true;
             }
             else
             {
+                List<(string Username, string Name)> users = client.GetAllKnownUsers();
+                foreach (var user in users)
+                {
+                    usersComboBox.Items.Add(user.Username);
+                }
                 inputChatNamePanel.Visible = false;
                 addMembersPanel.Visible = true;
             }
         }
 
-        private void AddButton_Click(object sender, EventArgs e)
+        private void AddMemberButton_Click(object sender, EventArgs e)
         {
-            string username = memberNameTextBox.Text;
-            string? displayName = client.FindUser(username);
-            if (displayName == null)
+            string username = usersComboBox.Text;
+            if (username != string.Empty)
             {
-                findUserErrorLabel2.Visible = true;
-            }
-            else if (displayName != client.SelfName)
-            {
-                newChatUsers.Add(username);
-                memberNameTextBox.Text = string.Empty;
-                addedMembersLabel.Visible = true;
-                addedMembersLabel.Text += $"\n{username}"; 
+                string? displayName = client.FindUser(username);
+                if (displayName == null)
+                {
+                    findUserErrorLabel2.Visible = true;
+                }
+                else if (displayName != client.SelfName)
+                {
+                    newChatUsers.Add(username);
+                    usersComboBox.Text = string.Empty;
+                    addedMembersLabel.Text += $"\n{username}";
+                } 
             }
         }
 
@@ -202,6 +223,7 @@ namespace Client
                 AddButtonForChat(chatNameTextBox.Text);
             }
             newChatUsers.Clear();
+            usersComboBox.Items.Clear();
             chatNameTextBox.Text = string.Empty;
             findUserErrorLabel2.Visible = false;
             addMembersPanel.Visible = false;
@@ -214,7 +236,6 @@ namespace Client
         {
             chatNameErrorLabel.Visible = false;
         }
-
 
     }
 }

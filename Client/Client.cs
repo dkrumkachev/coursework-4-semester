@@ -23,6 +23,7 @@ using System.Windows.Forms.Design;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.StartPanel;
 using System.Drawing;
 using System.Diagnostics.Eventing.Reader;
+using System.Reflection;
 
 namespace Client
 {
@@ -34,7 +35,7 @@ namespace Client
         private readonly TripleDES server3DES = new();
         private ConcurrentDictionary<int, Chat> chats = new();
         private ConcurrentDictionary<string, (int ID, string Name)> users = new();
-        private ConcurrentDictionary<int, string> usersNames = new();
+        private ConcurrentDictionary<int, (string Username, string Name)> usersNames = new();
         private List<ChatMessage> unreadMessages = new();
         private int selfID;
 
@@ -63,7 +64,7 @@ namespace Client
         {
             public List<KeyValuePair<int, Chat>> Chats;
             public List<KeyValuePair<string, (int, string)>> Users;
-            public List<KeyValuePair<int, string>> UsersNames;
+            public List<KeyValuePair<int, (string, string)>> UsersNames;
         }
 
         public void Save(string filename)
@@ -90,7 +91,7 @@ namespace Client
                 var savedInfo = (SavedInfo)serializer.Deserialize(stream);
                 chats = new ConcurrentDictionary<int, Chat>(savedInfo.Chats);
                 users = new ConcurrentDictionary<string, (int ID, string Name)>(savedInfo.Users);
-                usersNames = new ConcurrentDictionary<int, string>(savedInfo.UsersNames);
+                usersNames = new ConcurrentDictionary<int, (string, string)>(savedInfo.UsersNames);
             }
         }
 
@@ -167,7 +168,7 @@ namespace Client
             SelfName = userInfoMessage.Name;
             SelfUsername = username;
             users.TryAdd(username, (selfID, SelfName));
-            usersNames.TryAdd(selfID, SelfName);
+            usersNames.TryAdd(selfID, (SelfUsername, SelfName));
             var selfChat = new Chat(0, new List<int> { selfID }, SelfChatName);
             selfChat.TripleDES.GenerateKey();
             chats.TryAdd(0, selfChat);
@@ -192,6 +193,33 @@ namespace Client
             server.Close();
         }
 
+        public List<(string Username, string Name)> GetAllKnownUsers()
+        {
+            var result = new List<(string, string)>();
+            foreach (KeyValuePair<string, (int, string)> keyValuePair in users.ToList())
+            {
+                if (keyValuePair.Key != SelfUsername)
+                {
+                    result.Add((keyValuePair.Key, keyValuePair.Value.Item2));
+                }
+            }
+            result.Remove((SelfUsername, SelfName));
+            return result;
+        }
+
+        public bool ChatNameExists(string chatName)
+        {
+            foreach (Chat chat in chats.Values)
+            {
+                if (chat.Name == chatName)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+
         public string? FindUser(string username)
         {
             if (users.TryGetValue(username, out var user)) 
@@ -212,16 +240,16 @@ namespace Client
 
         private string? FindUser(int id)
         {
-            if (usersNames.TryGetValue(id, out var name))
+            if (usersNames.TryGetValue(id, out (string, string Name) value))
             {
-                return name;
+                return value.Name;
             }
             SendToServer(new UserInfoMessage(selfID, id));
             for (var i = 0; i < 4; i++)
             {
-                if (usersNames.TryGetValue(id, out name))
+                if (usersNames.TryGetValue(id, out value))
                 {
-                    return name;
+                    return value.Name;
                 }
                 Thread.Sleep(50);
             }
@@ -270,13 +298,17 @@ namespace Client
             return true;
         }
 
-        public int GetChatMembersCount(int chatID)
+        public List<(string, string)> GetChatMembers(int chatID)
         {
+            var result = new List<(string, string)>();
             if (chats.TryGetValue(chatID, out var chat))
             {
-                return chat.Members.Count;
+                foreach (var member in chat.Members)
+                {
+                    result.Add(usersNames[member]);
+                }
             }
-            return 0;
+            return result;
         }
 
         public void SendText(int chatID, string text)
@@ -375,7 +407,7 @@ namespace Client
             }
             if (msg.Contents.Length == 0 && msg is FileMessage fileMsg)
             {
-                incomingFile(msg.ChatID, usersNames[msg.SenderID], fileMsg.FileName, fileMsg.FileID);
+                incomingFile(msg.ChatID, usersNames[msg.SenderID].Name, fileMsg.FileName, fileMsg.FileID);
             }
             else
             {
@@ -383,12 +415,12 @@ namespace Client
                 if (msg.ContentsType == MessageWithContents.Type.Image)
                 {
                     Image image = Image.FromStream(new MemoryStream(contents));
-                    incomingImage(msg.ChatID, usersNames[msg.SenderID], image);
+                    incomingImage(msg.ChatID, usersNames[msg.SenderID].Name, image);
                 }
                 else if (msg.ContentsType == MessageWithContents.Type.Text)
                 {
                     string text = Encoding.Default.GetString(contents);
-                    incomingText(msg.ChatID, usersNames[msg.SenderID], text);
+                    incomingText(msg.ChatID, usersNames[msg.SenderID].Name, text);
                 }
                 else if (msg.ContentsType == MessageWithContents.Type.File)
                 {
@@ -459,7 +491,7 @@ namespace Client
             if (message.UserID != 0)
             {
                 users.TryAdd(message.Username, (message.UserID, message.Name));
-                usersNames.TryAdd(message.UserID, message.Name);
+                usersNames.TryAdd(message.UserID, (message.Username, message.Name));
             }
         }
 

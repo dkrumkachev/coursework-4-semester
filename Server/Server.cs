@@ -68,7 +68,7 @@ namespace Server
         {
             //Sql.Execute("ALTER TABLE Users ADD history_key VARBINARY(MAX) NOT NULL");
             //Sql.Execute("CREATE TABLE Files (fileID VARCHAR(64) NOT NULL, contents VARBINARY(MAX) NOT NULL);");
-            Sql.DeleteUser("dmitriy");
+            //Sql.DeleteUser("dmitriy");
 
             try
             {

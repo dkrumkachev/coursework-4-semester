@@ -394,14 +394,30 @@ namespace Client
 
         private void DisplayChat(int chatID)
         {
-            int membersCount = client.GetChatMembersCount(chatID);
-            if (membersCount > 2)
+            List<(string Username, string Name)> members = client.GetChatMembers(chatID);
+            if (members.Count == 1)
             {
-                chatNameLabel.Text += $" ({membersCount} members)";
+                chatInfoLabel.Text = string.Empty;
+            }
+            else if (members.Count == 2)
+            {
+                (string Username, string Name) user = members.Find(i => i.Username != client.SelfUsername);
+                chatInfoLabel.Text = $"{user.Name}\n\nusername: {user.Username}";
+            }
+            else
+            {
+                chatNameLabel.Text += $" ({members.Count} members)";
+                var membersInfo = new StringBuilder();
+                foreach ((string Username, string Name) member in members)
+                {
+                    membersInfo.Append($"{member.Name} ({member.Username})\n");
+                }
+                chatInfoLabel.Text = membersInfo.ToString();
             }
             waitingLabel.Visible = false;
             messageTextBox.Enabled = true;
             fileButton.Enabled = true;
+            chatInfoLabel.Visible = true;
             foreach (Panel panel in chatMessages[chatID])
             {
                 DisplayMessage(panel);
@@ -415,6 +431,7 @@ namespace Client
             waitingLabel.Text = "Waiting for all users to connect...";
             messageTextBox.Enabled = false;
             fileButton.Enabled = false;
+            chatInfoLabel.Visible = false;
         }
 
         private void DisplayPanels((Panel?, Panel) panels)
@@ -508,9 +525,9 @@ namespace Client
         private void FileButton_Click(object sender, EventArgs e)
         {
             if (openFileDialog.ShowDialog() == DialogResult.OK)
-            { 
+            {
                 byte[] bytes = File.ReadAllBytes(openFileDialog.FileName);
-                
+
                 try
                 {
                     Image image = Image.FromFile(openFileDialog.FileName);
@@ -559,6 +576,11 @@ namespace Client
         private void MainForm_FormClosed(object sender, FormClosedEventArgs e)
         {
             SaveHistory();
+        }
+
+        private void mainPanel_Paint(object sender, PaintEventArgs e)
+        {
+
         }
     }
 }
