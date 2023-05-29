@@ -24,6 +24,7 @@ using static System.Windows.Forms.VisualStyles.VisualStyleElement.StartPanel;
 using System.Drawing;
 using System.Diagnostics.Eventing.Reader;
 using System.Reflection;
+using System.Runtime.InteropServices;
 
 namespace Client
 {
@@ -35,6 +36,7 @@ namespace Client
         private readonly TripleDES server3DES = new();
         private ConcurrentDictionary<int, Chat> chats = new();
         private ConcurrentDictionary<string, (int ID, string Name)> users = new();
+        private readonly ConcurrentDictionary<string, bool> isOnline = new();
         private ConcurrentDictionary<int, (string Username, string Name)> usersNames = new();
         private List<ChatMessage> unreadMessages = new();
         private int selfID;
@@ -63,21 +65,17 @@ namespace Client
         public struct SavedInfo
         {
             public List<KeyValuePair<int, Chat>> Chats;
-            public List<KeyValuePair<string, (int, string)>> Users;
-            public List<KeyValuePair<int, (string, string)>> UsersNames;
         }
 
         public void Save(string filename)
         {
-            var savedInfo = new SavedInfo()
+            foreach (Chat chat in chats.Values)
             {
-                Chats = chats.ToList(),
-                Users = users.ToList(),
-                UsersNames = usersNames.ToList(),
-            };
+                chat.Files.Clear();
+            }
             var serializer = new BinaryFormatter();
             using var stream = new MemoryStream();
-            serializer.Serialize(stream, savedInfo);
+            serializer.Serialize(stream, chats.ToList());
             File.WriteAllBytes(filename, stream.ToArray());
         }
 
@@ -88,10 +86,12 @@ namespace Client
                 byte[] bytes = File.ReadAllBytes(filename);
                 var serializer = new BinaryFormatter();
                 using var stream = new MemoryStream(bytes);
-                var savedInfo = (SavedInfo)serializer.Deserialize(stream);
-                chats = new ConcurrentDictionary<int, Chat>(savedInfo.Chats);
-                users = new ConcurrentDictionary<string, (int ID, string Name)>(savedInfo.Users);
-                usersNames = new ConcurrentDictionary<int, (string, string)>(savedInfo.UsersNames);
+                var savedInfo = (List<KeyValuePair<int, Chat>>)serializer.Deserialize(stream);
+                chats = new ConcurrentDictionary<int, Chat>(savedInfo);
+                foreach ((string Username, string Name) user in usersNames.Values)
+                {
+                    isOnline.TryAdd(user.Username, false);
+                }
             }
         }
 
@@ -168,6 +168,7 @@ namespace Client
             SelfName = userInfoMessage.Name;
             SelfUsername = username;
             users.TryAdd(username, (selfID, SelfName));
+            isOnline.TryAdd(username, true);
             usersNames.TryAdd(selfID, (SelfUsername, SelfName));
             var selfChat = new Chat(0, new List<int> { selfID }, SelfChatName);
             selfChat.TripleDES.GenerateKey();
@@ -176,6 +177,13 @@ namespace Client
             {
                 messageHistoryKey = authenticationMessage.HistoryKey;
                 unreadMessages = authenticationMessage.UnreadMessages;
+                var usersInfo = (MultipleUserInfoMessage)ReceiveMessage(server, server3DES);
+                foreach (UserInfoMessage userInfo in usersInfo.Users)
+                {
+                    users.TryAdd(userInfo.Username, (userInfo.UserID, userInfo.Name));
+                    usersNames.TryAdd(userInfo.UserID, (userInfo.Username, userInfo.Name));
+                    isOnline.TryAdd(userInfo.Username, userInfo.IsOnline);
+                }
             }
             return true;
         }
@@ -218,7 +226,11 @@ namespace Client
             }
             return false;
         }
-        
+
+        public bool IsUserOnline(string username)
+        {
+            return isOnline[username];
+        }
 
         public string? FindUser(string username)
         {
@@ -227,7 +239,7 @@ namespace Client
                 return user.Name;
             }
             SendToServer(new UserInfoMessage(selfID, username));
-            for (var i = 0; i < 5; i++)
+            for (var i = 0; i < 4; i++)
             {
                 if (users.TryGetValue(username, out var value))
                 {
@@ -338,7 +350,6 @@ namespace Client
             {
                 byte[] encrypted = chat.TripleDES.Encrypt(fileContents);
                 string fileID = Encryption.SHA256Hash(encrypted);
-                chat.Files.TryAdd(fileID, fileContents);
                 SendToServer(new FileMessage(chatID, selfID, encrypted, filename, fileID));
                 return fileID;
             }
@@ -490,8 +501,18 @@ namespace Client
         {
             if (message.UserID != 0)
             {
-                users.TryAdd(message.Username, (message.UserID, message.Name));
-                usersNames.TryAdd(message.UserID, (message.Username, message.Name));
+                if (!users.TryAdd(message.Username, (message.UserID, message.Name)))
+                {
+                    users[message.Username] = (message.UserID, message.Name);
+                }
+                if (!usersNames.TryAdd(message.UserID, (message.Username, message.Name)))
+                {
+                    usersNames[message.UserID] = (message.Username, message.Name);
+                }
+                if (!isOnline.TryAdd(message.Username, message.IsOnline))
+                {
+                    isOnline[message.Username] = message.IsOnline;
+                }
             }
         }
 

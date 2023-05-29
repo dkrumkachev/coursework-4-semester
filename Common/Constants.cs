@@ -1,4 +1,5 @@
-﻿using System.Net.Sockets;
+﻿using System.Net;
+using System.Net.Sockets;
 
 namespace Common
 {
@@ -10,7 +11,7 @@ namespace Common
         public const int SelfChatID = 0;
         public const int ServerID = 0;
 
-        public static int TransferBlockSize { get; } = 1048576;
+        public static int TransferBlockSize { get; } = 10 * 1024 * 1024;
         
         public static int ServerPort { get; } = 4886;
 

@@ -1,6 +1,8 @@
 using Common.Encryption;
 using Common.Messages;
+using Microsoft.VisualBasic.ApplicationServices;
 using Org.BouncyCastle.Asn1.Cms;
+using Org.BouncyCastle.Utilities;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
@@ -24,12 +26,17 @@ namespace Client
         private const int space = 5;
         private Color ownMessageColor = Color.DodgerBlue;
         private Color othersMessageColor = Color.FromArgb(16, 53, 53);
-        private Image fileImage = Image.FromFile("64.png");
+        private Image downloadFileImage = Image.FromFile("download.png");
+        private Image downloadedFileImage = Image.FromFile("tick.png");
         private byte[] messageHistoryKey = Array.Empty<byte>();
         private readonly Dictionary<int, List<Panel>> chatMessages = new() { { 0, new List<Panel>() } };
         private Dictionary<int, List<DisplayedMessage>> history = new() { { 0, new List<DisplayedMessage>() } };
         private readonly Dictionary<int, int> nextMessageY = new() { { 0, space * 2 } };
         private readonly Dictionary<int, (int Day, int Month)> lastMessageDate = new() { { 0, (0, 0) } };
+        private readonly Dictionary<int, List<(string ID, string Filename)>> files = new() {
+            { 0, new List<(string, string)>() }
+        };
+        private readonly Dictionary<string, PictureBox> pictureBoxes = new();
 
         public MainForm()
         {
@@ -67,6 +74,7 @@ namespace Client
                 if (!Authorization())
                 {
                     authenticationPanel.Visible = true;
+                    usernameTextBox.Focus();
                 }
             });
         }
@@ -91,7 +99,6 @@ namespace Client
             AddScrollBar(chatPanel);
             AddScrollBar(leftPanel);
             AddScrollBar(membersPanel);
-            AddScrollBar(filesPanel);
         }
 
         private void AddScrollBar(Panel panel)
@@ -113,6 +120,7 @@ namespace Client
                 chats.Clear();
                 nextMessageY.Clear();
                 lastMessageDate.Clear();
+                files.Clear();
                 byte[] chatHistories = File.ReadAllBytes(historyPath);
                 var tripleDES = new TripleDES()
                 {
@@ -158,6 +166,7 @@ namespace Client
                 chatMessages.Add(chatID, new List<Panel>());
                 nextMessageY.Add(chatID, space * 2);
                 lastMessageDate.Add(chatID, (0, 0));
+                files.Add(chatID, new List<(string, string)>());
                 foreach (object msg in keyValue.Value)
                 {
                     try
@@ -253,11 +262,12 @@ namespace Client
             {
                 SizeMode = PictureBoxSizeMode.AutoSize,
                 BorderStyle = BorderStyle.None,
-                Image = (Image)fileImage.Clone(),
+                Image = (Image)downloadFileImage.Clone(),
                 Name = fileID,
                 Cursor = Cursors.Hand,
             };
             pictureBox.MouseClick += FilePictureBox_MouseClick;
+            pictureBoxes.TryAdd(fileID, pictureBox);
             return pictureBox;
         }
 
@@ -270,7 +280,7 @@ namespace Client
                     var parentPanel = (Panel)pictureBox.Parent;
                     var filenameLabel = (Label)parentPanel.Controls[2];
                     string filename = filenameLabel.Text;
-                    filename = filename.Remove(filename.LastIndexOf(" "));
+                    filename = filename.Remove(filename.LastIndexOf(' '));
                     string fileID = pictureBox.Name;
                     string? path = ShowSaveFileDialog(filename);
                     if (path != null)
@@ -280,13 +290,17 @@ namespace Client
                         {
                             byte[] file = client.GetFile(selectedChat, filename, fileID);
                             File.WriteAllBytes(path, file);
+                            Invoke(() =>
+                            {
+                                pictureBox.Image = (Image)downloadedFileImage.Clone();
+                                pictureBox.Enabled = true;
+                            });
                         });
-                        pictureBox.Enabled = true;
                     }
                 }
                 catch
                 {
-                    MessageBox.Show("Error downloading file");
+                    MessageBox.Show("Error downloading the file");
                 }
             }
         }
@@ -369,6 +383,11 @@ namespace Client
 
         private (Panel?, Panel) CreatePanel(string sender, string filename, string fileID, bool isIncoming, int chat)
         {
+            
+            if (!files[chat].Contains((fileID, filename)))
+            {
+                files[chat].Add((fileID, filename));
+            }
             PictureBox pictureBox = CreatePictureBoxForFile(fileID);
             return CreatePanel(pictureBox, sender, filename, isIncoming, chat);
         }
@@ -402,22 +421,32 @@ namespace Client
             else if (members.Count == 2)
             {
                 (string Username, string Name) user = members.Find(i => i.Username != client.SelfUsername);
-                chatInfoLabel.Text = $"{user.Name}\n\nusername: {user.Username}";
+                string online = client.IsUserOnline(user.Username) ? "online" : "offline";
+                chatInfoLabel.Text = $"{user.Name}\n\n{online}\n\nUsername: {user.Username}";
             }
             else
             {
-                chatNameLabel.Text += $" ({members.Count} members)";
                 var membersInfo = new StringBuilder();
+                int onlineCount = 0;
                 foreach ((string Username, string Name) member in members)
                 {
-                    membersInfo.Append($"{member.Name} ({member.Username})\n");
+                    string online = "";
+                    if (client.IsUserOnline(member.Username))
+                    {
+                        online = "(online)";
+                        onlineCount++;
+                    }
+                    string username = member.Username == member.Name ? "" : $"({member.Username})";
+                    membersInfo.Append($"{member.Name} {username} {online}\n");
                 }
                 chatInfoLabel.Text = membersInfo.ToString();
+                chatNameLabel.Text += $" ({members.Count} members, {onlineCount} online)";
             }
             waitingLabel.Visible = false;
             messageTextBox.Enabled = true;
             fileButton.Enabled = true;
             chatInfoLabel.Visible = true;
+            filesListBox.Items.AddRange(files[chatID].Select(i => i.Filename).ToArray());
             foreach (Panel panel in chatMessages[chatID])
             {
                 DisplayMessage(panel);
@@ -495,6 +524,7 @@ namespace Client
                 if (chat == selectedChat)
                 {
                     DisplayPanels(panels);
+                    filesListBox.Items.Add(filename);
                 }
             });
         }
@@ -513,7 +543,6 @@ namespace Client
             return (Math.Sign(fileSize) * normalizedSize).ToString() + sizeSuffixes[suffixIndex];
         }
 
-
         private void MessageTextBox_KeyPress(object sender, KeyPressEventArgs e)
         {
             if (e.KeyChar == (char)Keys.Enter)
@@ -526,37 +555,69 @@ namespace Client
         {
             if (openFileDialog.ShowDialog() == DialogResult.OK)
             {
-                byte[] bytes = File.ReadAllBytes(openFileDialog.FileName);
-
+                byte[] bytes;
+                try
+                {
+                    bytes = File.ReadAllBytes(openFileDialog.FileName);
+                    if (bytes.Length > 1024 * 1024 * 1024)
+                    {
+                        MessageBox.Show("The file can't be sent, because it is larger than 1 GB.", "File is too large");
+                        return;
+                    }
+                }
+                catch (IOException)
+                {
+                    MessageBox.Show("The file can't be sent, because it is larger than 1 GB.", "File is too large");
+                    return;
+                }
                 try
                 {
                     Image image = Image.FromFile(openFileDialog.FileName);
-                    if (selectedChat != 0)
-                    {
-                        Task.Run(() => client.SendImage(selectedChat, bytes));
-                    }
-                    history[selectedChat].Add(new DisplayedMessage("You", image, false));
-                    (Panel?, Panel) panels = CreatePanel("You", image, false, selectedChat);
-                    DisplayPanels(panels);
+                    SendImage(image, bytes);
                 }
                 catch (OutOfMemoryException)
                 {
-                    var filename = $"{Path.GetFileName(openFileDialog.FileName)} ({FileSizeToString(bytes.Length)})";
-                    string fileID = client.SendFile(selectedChat, bytes, filename);
-                    (Panel?, Panel) panels = CreatePanel("You", filename, fileID, false, selectedChat);
-                    DisplayPanels(panels);
-                    history[selectedChat].Add(new DisplayedMessage("You", filename, fileID, false));
+                    SendFile(bytes);
                 }
                 messageTextBox.Text = string.Empty;
                 messageTextBox.Focus();
             }
         }
 
+        private void SendImage(Image image, byte[] bytes)
+        {
+            if (selectedChat != 0)
+            {
+                Task.Run(() => client.SendImage(selectedChat, bytes));
+            }
+            history[selectedChat].Add(new DisplayedMessage("You", image, false));
+            (Panel?, Panel) panels = CreatePanel("You", image, false, selectedChat);
+            DisplayPanels(panels);
+        }
+
+        private void SendFile(byte[] bytes)
+        {
+            var filename = $"{Path.GetFileName(openFileDialog.FileName)} ({FileSizeToString(bytes.Length)})";
+            Task.Run(() =>
+            {
+                string fileID = client.SendFile(selectedChat, bytes, filename);
+                Invoke(() =>
+                {
+                    (Panel?, Panel) panels = CreatePanel("You", filename, fileID, false, selectedChat);
+                    DisplayPanels(panels);
+                });
+                history[selectedChat].Add(new DisplayedMessage("You", filename, fileID, false));
+                if (!filesListBox.Items.Contains(filename))
+                {
+                    filesListBox.Items.Add(filename);
+                }
+            });
+        }
+
         private string? ShowSaveFileDialog(string filename)
         {
             int dotIndex = filename.LastIndexOf('.');
-            int sizeIndex = filename.LastIndexOf(' ');
-            string extension = dotIndex == -1 ? "" : filename.Substring(dotIndex, sizeIndex - dotIndex);
+            string extension = dotIndex == -1 ? "" : filename[dotIndex..];
             bool dangerousExtension = extension == ".exe" || extension == ".bin" || extension == "msi"
                 || extension == ".jar" || extension == ".cmd" || extension == ".bat";
             if (dangerousExtension && MessageBox.Show($"This file has the extension {extension}.\n" +
@@ -578,9 +639,15 @@ namespace Client
             SaveHistory();
         }
 
-        private void mainPanel_Paint(object sender, PaintEventArgs e)
+        private void DownloadFileButton_Click(object sender, EventArgs e)
         {
-
+            if (filesListBox.SelectedIndex != -1)
+            {
+                int fileIndex = filesListBox.SelectedIndex;
+                string fileID = files[selectedChat][fileIndex].ID;
+                PictureBox filePictureBox = pictureBoxes[fileID];
+                FilePictureBox_MouseClick(filePictureBox, new MouseEventArgs(MouseButtons.Left, 1, 0, 0, 0));
+            }
         }
     }
 }

@@ -210,4 +210,15 @@ namespace Common.Messages
             IsOnline = isOnline;
         }
     }
+
+    [Serializable]
+    public class MultipleUserInfoMessage : Message
+    {
+        public List<UserInfoMessage> Users { get; set; }
+
+        public MultipleUserInfoMessage(int senderID, List<UserInfoMessage> users) : base(senderID)
+        {
+            Users = users;
+        }
+    }
 }

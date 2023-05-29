@@ -1,6 +1,7 @@
 ﻿using Common.Encryption;
 using Org.BouncyCastle.Crypto.Paddings;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Security;
@@ -39,18 +40,40 @@ namespace Common.Encryption
 
         public override byte[] Encrypt(byte[] bytes, bool decrypt = false)
         {
-            TripleDESCng tripleDES = new();
+            TripleDESCng tripleDES = new TripleDESCng();
             tripleDES.Key = key;
             tripleDES.IV = InitializationVector;
-            if (decrypt)
+            int blockSize = 20 * 1024 * 1024;
+            int numBlocks = (int)Math.Ceiling((double)bytes.Length / blockSize);
+            byte[][] encryptedBlocks = new byte[numBlocks][];
+            Parallel.For(0, numBlocks, i =>
             {
-                return tripleDES.DecryptEcb(bytes, System.Security.Cryptography.PaddingMode.PKCS7);
-            }
-            else
+                int startIndex = i * blockSize;
+                int length = Math.Min(blockSize, bytes.Length - startIndex);
+                byte[] block = new byte[length];
+                Array.Copy(bytes, startIndex, block, 0, length);
+                if (decrypt)
+                {
+                    encryptedBlocks[i] = tripleDES.DecryptEcb(block, PaddingMode.Zeros);
+                }
+                else
+                {
+                    encryptedBlocks[i] = tripleDES.EncryptEcb(block, PaddingMode.Zeros);
+                }
+            });
+            int length = encryptedBlocks.Sum(i => i.Length);
+            byte[] encryptedBytes = new byte[length];
+            int offset = 0;
+            foreach (byte[] block in encryptedBlocks)
             {
-                return tripleDES.EncryptEcb(bytes, System.Security.Cryptography.PaddingMode.PKCS7);
+                Array.Copy(block, 0, encryptedBytes, offset, block.Length);
+                offset += block.Length;
             }
+            return encryptedBytes;
         }
+
+
+
 
         public byte[] EncryptSlow(byte[] bytes, bool decrypt = false)
         {

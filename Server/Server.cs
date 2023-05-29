@@ -25,37 +25,14 @@ namespace Server
         private readonly ConcurrentDictionary<int, Client> clients = new();
         private readonly ConcurrentDictionary<int, List<Client>> chats = new() {};
         private int lastCreatedChat = 0;
-        private readonly ConcurrentDictionary<string, byte[]> files = new();
 
-
-        private IPAddress GetLocalIPv4()
-        {
-            return IPAddress.Parse(Constants.ServerIP);
-            foreach (NetworkInterface item in NetworkInterface.GetAllNetworkInterfaces())
-            {
-                if ((item.NetworkInterfaceType == NetworkInterfaceType.Wireless80211 ||
-                    item.NetworkInterfaceType == NetworkInterfaceType.Ethernet) &&
-                    item.OperationalStatus == OperationalStatus.Up)
-                {
-                    foreach (UnicastIPAddressInformation ip in item.GetIPProperties().UnicastAddresses)
-                    {
-                        if (ip.Address.AddressFamily == AddressFamily.InterNetwork)
-                        {
-                            return ip.Address;
-                        }
-                    }
-                }
-            }
-            return IPAddress.Loopback;
-        }
 
         private void BindSocketToThisMachine(Socket socket)
         {
-            IPAddress ipAddress = GetLocalIPv4();
             try
             {
-                socket.Bind(new IPEndPoint(ipAddress, Constants.ServerPort));
-                Console.WriteLine($"The server started at: {socket.LocalEndPoint?.ToString()}");
+                socket.Bind(new IPEndPoint(IPAddress.Parse(Constants.ServerIP), Constants.ServerPort));
+                Console.WriteLine($"The server is running at: {socket.LocalEndPoint?.ToString()}");
             }
             catch (SocketException)
             {
@@ -120,7 +97,7 @@ namespace Server
             catch (Exception ex)
             {
                 Console.WriteLine($"client {client?.Username} has disconnected.");
-                Console.WriteLine(ex.StackTrace + ex.Message);
+                //Console.WriteLine(ex.StackTrace + ex.Message);
             }
             finally
             {
@@ -130,8 +107,26 @@ namespace Server
                     {
                         client.IsOnline = false;
                     }
+                    SendUserOnlineInfoToChats(client);
                 }
                 clientSocket.Close();
+            }
+        }
+
+        private void SendUserOnlineInfoToChats(Client client)
+        {
+            foreach (int chatID in client.Chats)
+            {
+                SendUserOnlineInfo(client, chatID);
+            }
+        }
+
+        private void SendUserOnlineInfo(Client client, int chat)
+        {
+            var message = new UserInfoMessage(ServerID, client.ID, client.Username, client.Name, client.IsOnline);
+            foreach (Client chatMember in chats[chat])
+            {
+                chatMember.SendIfOnline(message);
             }
         }
 
@@ -156,8 +151,6 @@ namespace Server
                 {
                     Client client = message.IsSigningUp ? SignUp(clientSocket, message, tripleDES) 
                         : SignIn(clientSocket, message, tripleDES);
-                    client.IsOnline = true;
-                    client.TripleDES = tripleDES;
                     return client;
                 }
                 catch (ArgumentException e)
@@ -176,6 +169,8 @@ namespace Server
             var reply = new UserInfoMessage(ServerID, newUserID, message.Username, message.Username);
             SendMessage(reply, clientSocket, tripleDES);
             var client = new Client(clientSocket, message.Username, message.Username, newUserID);
+            client.IsOnline = true;
+            client.TripleDES = tripleDES;
             clients.TryAdd(newUserID, client);
             return client;
         }
@@ -197,6 +192,8 @@ namespace Server
                 throw new ArgumentException("You have already signed in");
             }
             client.Socket = clientSocket;
+            client.IsOnline = true;
+            client.TripleDES = tripleDES;
             Console.WriteLine($"{client.ID} {client.Name} has signed in.");
             var userInfoMessage = new UserInfoMessage(ServerID, user.ID, client.Username, client.Name, true);
             SendMessage(userInfoMessage, clientSocket, tripleDES);
@@ -204,7 +201,23 @@ namespace Server
             message.UnreadMessages = client.UnreadMessages.ToList();
             client.UnreadMessages.Clear();
             SendMessage(message, clientSocket, tripleDES);
+            SendInfoAboutUsers(client);
+            SendUserOnlineInfoToChats(client);
             return client;
+        }
+
+        private void SendInfoAboutUsers(Client client) 
+        {
+            var usersInfo = new List<UserInfoMessage>();
+            foreach (int chatID in client.Chats)
+            {
+                foreach (Client chatMember in chats[chatID])
+                {
+                    usersInfo.Add(new UserInfoMessage(ServerID, chatMember.ID,
+                        chatMember.Username, chatMember.Name, chatMember.IsOnline));
+                }
+            }
+            SendMessage(new MultipleUserInfoMessage(ServerID, usersInfo), client.Socket, client.TripleDES);
         }
 
         private bool HandleMessage(Message message)
@@ -270,19 +283,24 @@ namespace Server
                 foreach (int memberID in message.Members)
                 {
                     Client client = clients[memberID];
-                    Task.Run(() => { clients[memberID].SendIfOnline(message); });
+                    Task.Run(() => 
+                    { 
+                        client.SendIfOnline(message);
+                        SendUserOnlineInfo(client, message.ChatID); 
+                    });
                 }
             }      
         }
 
         private void CreateNewChat(ChatCreationMessage message)
         {
+            int chatID = Interlocked.Increment(ref lastCreatedChat);
             var chatMembers = new List<Client>();
             foreach (int id in message.Members)
             {
                 chatMembers.Add(clients[id]);
+                clients[id].Chats.Add(chatID);
             }
-            int chatID = Interlocked.Increment(ref lastCreatedChat);
             chats.TryAdd(chatID, chatMembers);
             message.ChatID = chatID;
         }
@@ -303,6 +321,7 @@ namespace Server
         {
             if (message.Contents.Length > 0)
             {
+                AddFile(message.FileID, message.Contents);
                 Sql.AddFile(message.FileID, message.Contents);
                 message.Contents = Array.Empty<byte>();
                 HandleChatMessage(message);
@@ -310,10 +329,28 @@ namespace Server
             else
             {
                 Client client = clients[message.SenderID];
+                //message.Contents = GetFile(message.FileID);
                 message.Contents = Sql.GetFile(message.FileID);
                 message.SenderID = ServerID;
                 client.SendIfOnline(message);
             }
+        }
+
+        private void AddFile(string fileID, byte[] data)
+        {
+            if (!File.Exists("files\\" + fileID))
+            {
+                File.WriteAllBytes("files\\" + fileID, data);
+            }
+        }
+
+        private byte[] GetFile(string fileID)
+        {
+            if (!File.Exists("files\\" + fileID))
+            {
+                return Array.Empty<byte>();
+            }
+            return File.ReadAllBytes(fileID);
         }
 
         private void HandleServiceMessage(ServiceMessage message)

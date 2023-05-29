@@ -32,6 +32,8 @@
             mainPanel = new Panel();
             rightPanel = new Panel();
             filesPanel = new Panel();
+            downloadFileButton = new Button();
+            filesListBox = new ListBox();
             label10 = new Label();
             membersPanel = new Panel();
             chatInfoLabel = new Label();
@@ -119,7 +121,6 @@
             mainPanel.Size = new Size(1570, 847);
             mainPanel.TabIndex = 0;
             mainPanel.Visible = false;
-            mainPanel.Paint += mainPanel_Paint;
             // 
             // rightPanel
             // 
@@ -136,11 +137,44 @@
             // 
             filesPanel.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             filesPanel.BackColor = Color.FromArgb(16, 53, 53);
+            filesPanel.Controls.Add(downloadFileButton);
+            filesPanel.Controls.Add(filesListBox);
             filesPanel.Controls.Add(label10);
             filesPanel.Location = new Point(0, 416);
             filesPanel.Name = "filesPanel";
             filesPanel.Size = new Size(250, 411);
             filesPanel.TabIndex = 25;
+            // 
+            // downloadFileButton
+            // 
+            downloadFileButton.BackColor = Color.DeepSkyBlue;
+            downloadFileButton.FlatStyle = FlatStyle.Flat;
+            downloadFileButton.Font = new Font("Segoe UI", 13.8F, FontStyle.Regular, GraphicsUnit.Point);
+            downloadFileButton.ForeColor = Color.Black;
+            downloadFileButton.Location = new Point(0, 371);
+            downloadFileButton.Margin = new Padding(0);
+            downloadFileButton.Name = "downloadFileButton";
+            downloadFileButton.Size = new Size(250, 42);
+            downloadFileButton.TabIndex = 24;
+            downloadFileButton.Text = "Download";
+            downloadFileButton.UseVisualStyleBackColor = false;
+            downloadFileButton.Visible = false;
+            downloadFileButton.Click += DownloadFileButton_Click;
+            // 
+            // filesListBox
+            // 
+            filesListBox.BackColor = Color.FromArgb(16, 53, 53);
+            filesListBox.BorderStyle = BorderStyle.FixedSingle;
+            filesListBox.Font = new Font("Segoe UI", 13.8F, FontStyle.Regular, GraphicsUnit.Point);
+            filesListBox.ForeColor = Color.White;
+            filesListBox.FormattingEnabled = true;
+            filesListBox.HorizontalScrollbar = true;
+            filesListBox.ItemHeight = 31;
+            filesListBox.Location = new Point(0, 48);
+            filesListBox.Name = "filesListBox";
+            filesListBox.Size = new Size(250, 312);
+            filesListBox.TabIndex = 22;
+            filesListBox.Visible = false;
             // 
             // label10
             // 
@@ -185,7 +219,7 @@
             label12.Name = "label12";
             label12.Size = new Size(250, 41);
             label12.TabIndex = 24;
-            label12.Text = "ChatInfo:";
+            label12.Text = "Chat info:";
             label12.TextAlign = ContentAlignment.MiddleLeft;
             // 
             // leftPanel
@@ -321,7 +355,7 @@
             addMembersPanel.Controls.Add(cancelButton4);
             addMembersPanel.Controls.Add(addMemberButton);
             addMembersPanel.Controls.Add(findUserErrorLabel2);
-            addMembersPanel.Location = new Point(1143, 892);
+            addMembersPanel.Location = new Point(1141, 899);
             addMembersPanel.Name = "addMembersPanel";
             addMembersPanel.Size = new Size(250, 401);
             addMembersPanel.TabIndex = 20;
@@ -342,6 +376,7 @@
             usersComboBox.Size = new Size(222, 39);
             usersComboBox.TabIndex = 27;
             usersComboBox.TextUpdate += UsernameComboBox_TextChanged;
+            usersComboBox.KeyPress += UsersComboBox_KeyPress;
             // 
             // label11
             // 
@@ -367,12 +402,11 @@
             // addedMembersLabel
             // 
             addedMembersLabel.Font = new Font("Segoe UI", 13.8F, FontStyle.Regular, GraphicsUnit.Point);
-            addedMembersLabel.Location = new Point(17, 320);
+            addedMembersLabel.Location = new Point(17, 326);
             addedMembersLabel.Name = "addedMembersLabel";
             addedMembersLabel.Size = new Size(220, 47);
             addedMembersLabel.TabIndex = 23;
             addedMembersLabel.Text = "Added members:";
-            addedMembersLabel.TextAlign = ContentAlignment.MiddleLeft;
             // 
             // createGroupChatButton
             // 
@@ -613,6 +647,7 @@
             usernameComboBox.Size = new Size(222, 39);
             usernameComboBox.TabIndex = 28;
             usernameComboBox.TextUpdate += UsernameComboBox_TextChanged;
+            usernameComboBox.KeyPress += UsernameComboBox_KeyPress;
             // 
             // label7
             // 
@@ -749,6 +784,7 @@
             nameTextBox.Name = "nameTextBox";
             nameTextBox.Size = new Size(332, 40);
             nameTextBox.TabIndex = 16;
+            nameTextBox.KeyPress += NameTextBox_KeyPress;
             // 
             // label1
             // 
@@ -786,7 +822,7 @@
             authenticationPanel.Controls.Add(passwordLabel);
             authenticationPanel.Controls.Add(errorLabel);
             authenticationPanel.Controls.Add(headerLabel);
-            authenticationPanel.Location = new Point(1597, 500);
+            authenticationPanel.Location = new Point(1590, 478);
             authenticationPanel.Name = "authenticationPanel";
             authenticationPanel.Size = new Size(344, 462);
             authenticationPanel.TabIndex = 14;
@@ -865,6 +901,7 @@
             usernameTextBox.Name = "usernameTextBox";
             usernameTextBox.Size = new Size(344, 40);
             usernameTextBox.TabIndex = 14;
+            usernameTextBox.KeyPress += UsernameTextBox_KeyPress;
             // 
             // passwordTextBox
             // 
@@ -879,6 +916,7 @@
             passwordTextBox.PasswordChar = '*';
             passwordTextBox.Size = new Size(344, 40);
             passwordTextBox.TabIndex = 15;
+            passwordTextBox.KeyPress += PasswordTextBox_KeyPress;
             // 
             // usernameLabel
             // 
@@ -951,11 +989,11 @@
             // 
             AutoScaleMode = AutoScaleMode.None;
             BackColor = Color.FromArgb(16, 53, 53);
-            ClientSize = new Size(1938, 1098);
+            ClientSize = new Size(1924, 1055);
             Controls.Add(waitingLabel);
+            Controls.Add(addMembersPanel);
             Controls.Add(createSingleChatPanel);
             Controls.Add(inputChatNamePanel);
-            Controls.Add(addMembersPanel);
             Controls.Add(chooseChatTypePanel);
             Controls.Add(authenticationPanel);
             Controls.Add(nameInputPanel);
@@ -1059,5 +1097,7 @@
         private Label label11;
         private Label chatInfoLabel;
         private ComboBox usernameComboBox;
+        private ListBox filesListBox;
+        private Button downloadFileButton;
     }
 }

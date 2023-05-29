@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -61,6 +62,13 @@ namespace Client
             findUserErrorLabel2.Visible = false;
         }
 
+        private void UsernameComboBox_KeyPress(object sender, KeyPressEventArgs e)
+        {
+            if (e.KeyChar == (char)Keys.Enter)
+            {
+                CreateSingleChatButton_Click(sender, e);
+            }
+        }
 
         private void CreateSingleChatButton_Click(object sender, EventArgs e)
         {
@@ -88,6 +96,7 @@ namespace Client
                     createSingleChatPanel.Visible = false;
                     leftPanel.Visible = true;
                     usernameComboBox.Items.Clear();
+                    usernameComboBox.SelectedText = string.Empty;
                     client.CreateSingleChat(username);
                     AddButtonForChat(displayName);
                 } 
@@ -129,8 +138,11 @@ namespace Client
                     initialChatPanelLabel.Visible = false;
                     chatPanel.AutoScrollPosition = new Point(0, 0);
                     chatPanel.Controls.Clear();
+                    filesListBox.Items.Clear();
                     messageTextBox.Visible = true;
                     fileButton.Visible = true;
+                    downloadFileButton.Visible = true;
+                    filesListBox.Visible = true;
                     messageTextBox.Focus();
                     selectedChat = id;
                     DisplayChat(id);
@@ -141,8 +153,11 @@ namespace Client
                     initialChatPanelLabel.Visible = false;
                     chatPanel.AutoScrollPosition = new Point(0, 0);
                     chatPanel.Controls.Clear();
+                    filesListBox.Items.Clear();
                     messageTextBox.Visible = true;
                     fileButton.Visible = true;
+                    downloadFileButton.Visible = true;
+                    filesListBox.Visible = true;
                     messageTextBox.Focus();
                     DisplayChatWaitingForUsers();
                 }
@@ -169,6 +184,7 @@ namespace Client
             history.Add(id, new List<DisplayedMessage>());
             nextMessageY.Add(id, space * 2);
             lastMessageDate.Add(id, (0, 0));
+            files.Add(id, new List<(string, string)>());
         }
 
         private void GroupChatButton_Click(object sender, EventArgs e)
@@ -196,6 +212,14 @@ namespace Client
             }
         }
 
+        private void UsersComboBox_KeyPress(object sender, KeyPressEventArgs e)
+        {
+            if (e.KeyChar == (char)Keys.Enter)
+            {
+                AddMemberButton_Click(sender, e);
+            }
+        }
+
         private void AddMemberButton_Click(object sender, EventArgs e)
         {
             string username = usersComboBox.Text;
@@ -206,7 +230,7 @@ namespace Client
                 {
                     findUserErrorLabel2.Visible = true;
                 }
-                else if (displayName != client.SelfName)
+                else if (displayName != client.SelfName && !newChatUsers.Contains(username))
                 {
                     newChatUsers.Add(username);
                     usersComboBox.Text = string.Empty;
@@ -224,6 +248,7 @@ namespace Client
             }
             newChatUsers.Clear();
             usersComboBox.Items.Clear();
+            usersComboBox.SelectedText = string.Empty;
             chatNameTextBox.Text = string.Empty;
             findUserErrorLabel2.Visible = false;
             addMembersPanel.Visible = false;

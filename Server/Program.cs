@@ -25,8 +25,10 @@ namespace Server
     {
         static void Main(string[] args)
         {
-            Server server = new Server();
+            var server = new Server();
             server.Run();
+            
         }
+
     }
 }

@@ -44,6 +44,23 @@ namespace Client
             return false;
         }
 
+
+        private void UsernameTextBox_KeyPress(object sender, KeyPressEventArgs e)
+        {
+            if (e.KeyChar == (char)Keys.Enter)
+            {
+                passwordTextBox.Focus();
+            }
+        }
+
+        private void PasswordTextBox_KeyPress(object sender, KeyPressEventArgs e)
+        {
+            if (e.KeyChar == (char)Keys.Enter)
+            {
+                ConfirmButton_Click(sender, e);
+            }
+        }
+
         private void ConfirmButton_Click(object sender, EventArgs e)
         {
             string username = usernameTextBox.Text;
@@ -139,9 +156,18 @@ namespace Client
             client.ReceiveMessages();
         }
 
+
+        private void NameTextBox_KeyPress(object sender, KeyPressEventArgs e)
+        {
+            if (e.KeyChar == (char)Keys.Enter)
+            {
+                SignUpButton_Click(sender, e);
+            }
+        }
+
         private void SignUpButton_Click(object sender, EventArgs e)
         {
-            if (nameTextBox.Text == string.Empty || client.SetName(nameTextBox.Text))
+            if (nameTextBox.Text != string.Empty && client.SetName(nameTextBox.Text))
             {
                 AuthorizationComplete();
             }
@@ -164,6 +190,8 @@ namespace Client
             chatMessages.Add(0, new List<Panel>());
             history.Clear();
             history.Add(0, new List<DisplayedMessage>());
+            files.Clear();
+            files.Add(0, new List<(string, string)>());
             nextMessageY.Clear();
             nextMessageY.Add(0, space * 2);
             lastMessageDate.Clear();
@@ -178,9 +206,12 @@ namespace Client
             selectedChat = -1;
             usersComboBox.Items.Clear();
             usernameComboBox.Items.Clear();
+            filesListBox.Items.Clear();
             addedMembersLabel.Text = "Added members:";
             newChatUsers.Clear();
             chatInfoLabel.Visible = false;
+            downloadFileButton.Visible = false;
+            filesListBox.Visible = false;
             ConnectToServer();
         }
     }

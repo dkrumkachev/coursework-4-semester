@@ -38,7 +38,7 @@ namespace Server
             }
         }
 
-        public static void AddFile(string fileID, byte[] contents)
+        public static bool AddFile(string fileID, byte[] contents)
         {
             var insertSql = "INSERT INTO Files (fileID, contents) VALUES (@fileID, @contents);";
             using var connection = new SqlConnection(SqlConnectionString);
@@ -46,7 +46,15 @@ namespace Server
             command.Parameters.AddWithValue("@fileID", fileID);
             command.Parameters.AddWithValue("@contents", contents);
             connection.Open();
-            command.ExecuteNonQuery();
+            try
+            {
+               command.ExecuteNonQuery();
+            }
+            catch
+            {
+                return false;
+            }
+            return true;
         }
 
         public static List<UserRecord> GetAllUsers()
